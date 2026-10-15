@@ -1,0 +1,1489 @@
+<title>KiloWattX KYC Walkthrough</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Devanagari:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#EDF0EE; --surface:#FFFFFF; --surface-2:#F5F7F6; --surface-3:#E7EBE9;
+    --line:#D3DAD7; --line-strong:#B6C0BC;
+    --ink:#10201E; --ink-2:#44564F; --ink-3:#6E817A;
+    --copper:#A85B12; --copper-soft:#F6E8DA;
+    --verdigris:#2E6F63; --verdigris-soft:#DDEAE6;
+    --ok:#1C7049; --ok-soft:#DCEDE3;
+    --warn:#8A6400; --warn-soft:#F5EBD2;
+    --bad:#9E2F2F; --bad-soft:#F4DFDF;
+    --shadow:0 1px 2px rgba(16,32,30,.06), 0 8px 24px -12px rgba(16,32,30,.18);
+    --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --body:"IBM Plex Sans","IBM Plex Sans Devanagari",-apple-system,Segoe UI,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0B1413; --surface:#121E1C; --surface-2:#182724; --surface-3:#1E2F2C;
+      --line:#273734; --line-strong:#3C504B;
+      --ink:#E6EDEA; --ink-2:#A3B4AE; --ink-3:#7D8F89;
+      --copper:#E2944A; --copper-soft:#3A2512;
+      --verdigris:#6CBCAB; --verdigris-soft:#133029;
+      --ok:#5FC68F; --ok-soft:#0F2E1E;
+      --warn:#DBB055; --warn-soft:#2F2510;
+      --bad:#E48686; --bad-soft:#331818;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0B1413; --surface:#121E1C; --surface-2:#182724; --surface-3:#1E2F2C;
+    --line:#273734; --line-strong:#3C504B;
+    --ink:#E6EDEA; --ink-2:#A3B4AE; --ink-3:#7D8F89;
+    --copper:#E2944A; --copper-soft:#3A2512;
+    --verdigris:#6CBCAB; --verdigris-soft:#133029;
+    --ok:#5FC68F; --ok-soft:#0F2E1E;
+    --warn:#DBB055; --warn-soft:#2F2510;
+    --bad:#E48686; --bad-soft:#331818;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--body); font-size:15px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:0}
+  a{color:var(--verdigris)}
+  button{font:inherit; color:inherit; cursor:pointer}
+  :focus-visible{outline:2px solid var(--verdigris); outline-offset:2px; border-radius:3px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    border-bottom:1px solid var(--line); background:var(--surface);
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+  }
+  .topbar-in{
+    max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:12px;
+    display:flex; flex-wrap:wrap; gap:14px 18px; align-items:center;
+  }
+  .brand{display:flex; align-items:baseline; gap:9px; margin-right:auto}
+  .brand b{
+    font-family:var(--display); font-weight:700; font-size:17px;
+    letter-spacing:-.025em;
+  }
+  .brand .sub{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3);
+  }
+  .chip-proto{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--copper);
+    background:var(--copper-soft); border:1px solid var(--copper);
+    padding:3px 7px; border-radius:2px; white-space:nowrap;
+  }
+  .ctl{display:flex; align-items:center; gap:7px}
+  .ctl label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--ink-3);
+  }
+  select{
+    font:inherit; font-size:13.5px; color:var(--ink); background:var(--surface-2);
+    border:1px solid var(--line-strong); border-radius:4px; padding:5px 8px;
+  }
+  .seg{display:flex; border:1px solid var(--line-strong); border-radius:4px; overflow:hidden}
+  .seg button{
+    background:var(--surface-2); border:0; padding:6px 11px; font-size:13px;
+    color:var(--ink-2); border-left:1px solid var(--line);
+  }
+  .seg button:first-child{border-left:0}
+  .seg button[aria-pressed="true"]{background:var(--verdigris); color:#fff; font-weight:500}
+
+  /* ---------- flow rail ---------- */
+  .rail-shell{overflow-x:auto; border-bottom:1px solid var(--line); background:var(--surface-2)}
+  .rail{
+    max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:12px;
+    display:flex; align-items:center; gap:0; min-width:max-content;
+  }
+  .rail-step{
+    display:flex; align-items:center; gap:8px; border:0; background:none;
+    padding:4px 2px; font-size:12.5px; color:var(--ink-3); white-space:nowrap;
+  }
+  .rail-step .dot{
+    width:19px; height:19px; border-radius:50%; flex:none;
+    border:1.5px solid var(--line-strong); background:var(--surface);
+    display:grid; place-items:center;
+    font-family:var(--mono); font-size:10px; color:var(--ink-3);
+  }
+  .rail-step.done .dot{background:var(--verdigris); border-color:var(--verdigris); color:#fff}
+  .rail-step.now{color:var(--ink); font-weight:600}
+  .rail-step.now .dot{
+    border-color:var(--copper); background:var(--copper); color:#fff;
+    box-shadow:0 0 0 3px var(--copper-soft);
+  }
+  .rail-link{width:22px; height:1.5px; background:var(--line-strong); flex:none; margin:0 4px}
+
+  /* ---------- split ---------- */
+  .split{
+    display:grid; grid-template-columns:minmax(0,1fr) 352px; gap:22px;
+    padding-block:22px 40px; align-items:start;
+  }
+  @media (max-width:900px){ .split{grid-template-columns:minmax(0,1fr)} }
+
+  /* ---------- browser frame ---------- */
+  .frame{
+    background:var(--surface); border:1px solid var(--line-strong);
+    border-radius:8px; box-shadow:var(--shadow); overflow:hidden;
+  }
+  .chrome{
+    display:flex; align-items:center; gap:9px;
+    padding:9px 12px; background:var(--surface-3); border-bottom:1px solid var(--line);
+  }
+  .chrome .lights{display:flex; gap:5px}
+  .chrome .lights i{width:9px; height:9px; border-radius:50%; background:var(--line-strong)}
+  .urlbar{
+    flex:1; min-width:0; background:var(--surface); border:1px solid var(--line);
+    border-radius:4px; padding:4px 9px;
+    font-family:var(--mono); font-size:11.5px; color:var(--ink-2);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .urlbar .lock{color:var(--ok)}
+  .stage{padding:30px 28px 34px}
+  @media (max-width:560px){ .stage{padding:22px 16px 26px} }
+
+  /* ---------- screen content ---------- */
+  .eyebrow{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--copper); margin:0 0 10px;
+  }
+  h1.screen-title{
+    font-family:var(--display); font-weight:700; font-size:clamp(22px,3.4vw,29px);
+    letter-spacing:-.025em; line-height:1.15; margin:0 0 10px; text-wrap:balance;
+  }
+  .lead{margin:0 0 22px; color:var(--ink-2); max-width:58ch}
+  .stage h2{
+    font-family:var(--display); font-weight:600; font-size:15px;
+    letter-spacing:-.01em; margin:26px 0 10px;
+  }
+
+  .notice{
+    border:1px solid var(--line); border-left:3px solid var(--verdigris);
+    background:var(--surface-2); border-radius:0 5px 5px 0; padding:14px 16px; margin:0 0 20px;
+  }
+  .notice .nh{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--verdigris); margin-bottom:8px;
+  }
+  .notice ul{margin:0; padding-left:18px}
+  .notice li{margin:5px 0; color:var(--ink-2); font-size:14px}
+  .notice li b{color:var(--ink); font-weight:600}
+
+  .kv{display:grid; gap:0; border:1px solid var(--line); border-radius:5px; overflow:hidden}
+  .kv-row{
+    display:grid; grid-template-columns:minmax(110px,.9fr) minmax(0,1.6fr);
+    border-top:1px solid var(--line);
+  }
+  .kv-row:first-child{border-top:0}
+  .kv-row dt{
+    padding:10px 13px; background:var(--surface-2); color:var(--ink-3);
+    font-family:var(--mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase;
+  }
+  .kv-row dd{margin:0; padding:10px 13px; font-size:14px}
+  .kv-row dd .mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .kv-row dd small{display:block; color:var(--ink-3); font-size:12px; margin-top:3px}
+
+  .field{margin:0 0 15px; max-width:420px}
+  .field label{
+    display:block; font-size:12.5px; font-weight:500; color:var(--ink-2); margin-bottom:5px;
+  }
+  .field .inputbox{
+    border:1px solid var(--line-strong); background:var(--surface-2);
+    border-radius:5px; padding:10px 12px;
+    font-family:var(--mono); font-size:14px; letter-spacing:.04em;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .field .inputbox.ok{border-color:var(--ok)}
+  .field .hint{font-size:12px; color:var(--ink-3); margin-top:5px; font-family:var(--mono)}
+  .tick{color:var(--ok); font-weight:500; font-family:var(--body); font-size:12.5px}
+
+  .btn{
+    border:1px solid var(--copper); background:var(--copper); color:#fff;
+    border-radius:5px; padding:11px 20px; font-weight:600; font-size:14.5px;
+  }
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent; color:var(--ink-2); border-color:var(--line-strong); font-weight:500}
+  .btn.block{display:block; width:100%; max-width:420px; text-align:center}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+  .btnrow{display:flex; flex-wrap:wrap; gap:10px; margin-top:22px}
+
+  .choices{display:grid; gap:11px; max-width:460px; margin:0 0 20px}
+  .choice{
+    display:flex; gap:12px; align-items:flex-start; text-align:left;
+    border:1px solid var(--line-strong); background:var(--surface-2);
+    border-radius:6px; padding:13px 15px;
+  }
+  .choice.sel{border-color:var(--copper); background:var(--copper-soft)}
+  .choice .radio{
+    width:15px; height:15px; border-radius:50%; border:1.5px solid var(--line-strong);
+    margin-top:3px; flex:none; background:var(--surface);
+  }
+  .choice.sel .radio{border-color:var(--copper); border-width:4.5px}
+  .choice .ct{font-weight:600; font-size:14.5px}
+  .choice .cd{font-size:12.5px; color:var(--ink-3); margin-top:2px}
+  .choice .tag{
+    font-family:var(--mono); font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--verdigris); margin-left:auto; flex:none; padding-top:3px;
+  }
+
+  .dropzone{
+    border:1.5px dashed var(--line-strong); border-radius:6px; background:var(--surface-2);
+    padding:22px 18px; text-align:center; max-width:460px;
+  }
+  .dropzone .dz-t{font-weight:600; font-size:14px}
+  .dropzone .dz-s{font-size:12.5px; color:var(--ink-3); margin-top:4px; font-family:var(--mono)}
+
+  .filerow{
+    display:flex; align-items:center; gap:11px; max-width:460px;
+    border:1px solid var(--line); border-radius:5px; padding:11px 13px;
+    background:var(--surface-2); margin-bottom:9px;
+  }
+  .filerow .fi{
+    width:30px; height:36px; flex:none; border:1px solid var(--line-strong);
+    border-radius:2px; background:var(--surface);
+    font-family:var(--mono); font-size:8.5px; display:grid; place-items:center; color:var(--ink-3);
+  }
+  .filerow .fn{min-width:0; flex:1}
+  .filerow .fn b{display:block; font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .filerow .fn span{font-size:11.5px; color:var(--ink-3); font-family:var(--mono)}
+
+  .cam{
+    max-width:300px; aspect-ratio:3/4; border-radius:8px; overflow:hidden;
+    background:var(--surface-3); border:1px solid var(--line-strong); position:relative;
+  }
+  .cam svg{display:block; width:100%; height:100%}
+  .cam .oval{
+    position:absolute; inset:11% 15%; border:2px dashed var(--copper);
+    border-radius:50%/40%; pointer-events:none;
+  }
+  .cam .camhint{
+    position:absolute; left:0; right:0; bottom:0; padding:9px 12px;
+    background:linear-gradient(transparent,rgba(11,20,19,.82));
+    color:#F0F4F2; font-family:var(--mono); font-size:11px; text-align:center;
+  }
+
+  .spin{
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid var(--line); border-top-color:var(--copper);
+    animation:sp .9s linear infinite; margin:4px 0 16px;
+  }
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .tickline{display:flex; align-items:center; gap:9px; font-size:14px; margin:7px 0; color:var(--ink-2)}
+  .tickline i{
+    width:16px; height:16px; border-radius:50%; flex:none; display:grid; place-items:center;
+    background:var(--ok-soft); color:var(--ok); font-size:10px; font-style:normal; font-weight:700;
+  }
+  .tickline.pend i{background:var(--surface-3); color:var(--ink-3)}
+
+  .verdict{
+    display:flex; gap:14px; align-items:flex-start; border-radius:7px;
+    padding:18px 20px; margin:0 0 22px; border:1px solid;
+  }
+  .verdict .vi{
+    width:36px; height:36px; border-radius:50%; flex:none; display:grid; place-items:center;
+    font-family:var(--display); font-weight:700; font-size:17px; color:#fff;
+  }
+  .verdict .vt{font-family:var(--display); font-weight:700; font-size:19px; letter-spacing:-.02em}
+  .verdict .vs{font-size:14px; color:var(--ink-2); margin-top:4px; max-width:50ch}
+  .verdict.ok{background:var(--ok-soft); border-color:var(--ok)}
+  .verdict.ok .vi{background:var(--ok)}
+  .verdict.warn{background:var(--warn-soft); border-color:var(--warn)}
+  .verdict.warn .vi{background:var(--warn)}
+  .verdict.bad{background:var(--bad-soft); border-color:var(--bad)}
+  .verdict.bad .vi{background:var(--bad)}
+
+  .reasons{list-style:none; margin:0; padding:0; display:grid; gap:7px; max-width:560px}
+  .reasons li{
+    display:flex; gap:10px; align-items:baseline;
+    border:1px solid var(--line); border-radius:4px; padding:9px 12px; background:var(--surface-2);
+    font-size:13.5px;
+  }
+  .reasons code{
+    font-family:var(--mono); font-size:11px; color:var(--warn); flex:none;
+    letter-spacing:.03em;
+  }
+
+  /* ---------- annotation panel ---------- */
+  .annot{
+    border:1px solid var(--line); border-radius:8px; background:var(--surface);
+    box-shadow:var(--shadow); overflow:hidden;
+    position:sticky; top:calc(env(safe-area-inset-top,0px) + 118px);
+  }
+  @media (max-width:900px){ .annot{position:static} }
+  .annot-head{
+    padding:13px 16px; border-bottom:1px solid var(--line); background:var(--surface-3);
+  }
+  .annot-head .ah{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-3);
+  }
+  .annot-head .as{font-family:var(--display); font-weight:600; font-size:14.5px; margin-top:3px}
+  .annot-body{padding:4px 16px 16px}
+  .blk{border-top:1px solid var(--line); padding:14px 0 2px}
+  .blk:first-child{border-top:0; padding-top:14px}
+  .blk > .bh{
+    font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-3); margin-bottom:9px;
+  }
+  .ep{
+    display:flex; gap:8px; align-items:baseline; margin:0 0 7px;
+    font-family:var(--mono); font-size:11.5px; word-break:break-all;
+  }
+  .ep .m{
+    flex:none; font-size:9.5px; letter-spacing:.06em; padding:2px 5px; border-radius:2px;
+    background:var(--verdigris-soft); color:var(--verdigris); border:1px solid var(--verdigris);
+  }
+  .ep .m.get{background:var(--surface-3); color:var(--ink-2); border-color:var(--line-strong)}
+  .ep .m.hook{background:var(--copper-soft); color:var(--copper); border-color:var(--copper)}
+  .tbls{display:flex; flex-wrap:wrap; gap:5px}
+  .tbl{
+    font-family:var(--mono); font-size:10.5px; padding:3px 6px; border-radius:2px;
+    background:var(--surface-2); border:1px solid var(--line-strong); color:var(--ink-2);
+  }
+  .tbl.w{border-color:var(--ok); color:var(--ok); background:var(--ok-soft)}
+  .fn-call{
+    font-family:var(--mono); font-size:11.5px; color:var(--copper);
+    background:var(--copper-soft); border:1px solid var(--copper);
+    border-radius:3px; padding:5px 8px; display:inline-block; word-break:break-all;
+  }
+  .rules{margin:0; padding:0; list-style:none; display:grid; gap:8px}
+  .rules li{
+    font-size:12.5px; color:var(--ink-2); line-height:1.45;
+    padding-left:13px; position:relative;
+  }
+  .rules li::before{
+    content:""; position:absolute; left:0; top:7px;
+    width:5px; height:5px; border-radius:1px; background:var(--verdigris);
+  }
+  .rules li b{color:var(--ink); font-weight:600}
+  .rules li code{font-family:var(--mono); font-size:11px; color:var(--copper)}
+  .rules li.danger::before{background:var(--bad)}
+
+  /* ---------- admin ---------- */
+  .adm{padding-block:22px 40px; display:grid; gap:20px}
+  .panel{
+    border:1px solid var(--line); border-radius:8px; background:var(--surface);
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  .panel-head{
+    padding:14px 18px; border-bottom:1px solid var(--line);
+    display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center;
+  }
+  .panel-head h2{
+    font-family:var(--display); font-weight:700; font-size:16px; margin:0;
+    letter-spacing:-.02em; margin-right:auto;
+  }
+  .filters{display:flex; flex-wrap:wrap; gap:6px}
+  .fchip{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.05em;
+    border:1px solid var(--line-strong); background:var(--surface-2);
+    color:var(--ink-2); border-radius:3px; padding:4px 8px;
+  }
+  .fchip.on{border-color:var(--verdigris); color:var(--verdigris); background:var(--verdigris-soft)}
+  .tscroll{overflow-x:auto}
+  table{border-collapse:collapse; width:100%; min-width:720px; font-size:13.5px}
+  thead th{
+    text-align:left; padding:9px 14px; background:var(--surface-2);
+    border-bottom:1px solid var(--line-strong);
+    font-family:var(--mono); font-size:10px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3); white-space:nowrap;
+  }
+  tbody td{padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+  tbody tr.sel{background:var(--verdigris-soft)}
+  tbody tr button.caseid{
+    border:0; background:none; padding:0; font-family:var(--mono); font-size:12.5px;
+    color:var(--verdigris); font-weight:500; text-decoration:underline; text-underline-offset:2px;
+  }
+  .num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .pill{
+    display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.05em;
+    text-transform:uppercase; padding:3px 6px; border-radius:2px; border:1px solid; white-space:nowrap;
+  }
+  .pill.r{background:var(--warn-soft); color:var(--warn); border-color:var(--warn)}
+  .pill.g{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+  .pill.b{background:var(--bad-soft); color:var(--bad); border-color:var(--bad)}
+  .pill.n{background:var(--surface-2); color:var(--ink-2); border-color:var(--line-strong)}
+  .sev{display:inline-block; width:3px; align-self:stretch; border-radius:2px; background:var(--warn)}
+
+  .detail{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:0}
+  @media (max-width:860px){ .detail{grid-template-columns:minmax(0,1fr)} }
+  .detail-main{padding:18px; border-right:1px solid var(--line)}
+  @media (max-width:860px){ .detail-main{border-right:0; border-bottom:1px solid var(--line)} }
+  .detail-side{padding:18px; background:var(--surface-2)}
+  .detail h3{
+    font-family:var(--display); font-weight:600; font-size:13px; margin:0 0 11px;
+    letter-spacing:.01em; color:var(--ink-2);
+  }
+  .faces{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:8px}
+  .face{width:132px}
+  .face .fimg{
+    aspect-ratio:1; border-radius:6px; overflow:hidden;
+    border:1px solid var(--line-strong); background:var(--surface-3);
+  }
+  .face .fimg svg{display:block; width:100%; height:100%}
+  .face .flab{
+    font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-3); margin-top:6px;
+  }
+  .face .fmeta{font-size:11.5px; color:var(--ink-3); margin-top:2px}
+  .meter{margin:14px 0 4px; max-width:330px}
+  .meter-top{display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px}
+  .meter-top b{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .track{height:7px; border-radius:4px; background:var(--surface-3); position:relative; overflow:hidden}
+  .track .fill{position:absolute; inset:0 auto 0 0; border-radius:4px}
+  .track .thr{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink)}
+  .meter-foot{
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-3); margin-top:5px;
+    display:flex; justify-content:space-between; gap:10px;
+  }
+  .tl{list-style:none; margin:0; padding:0; display:grid; gap:0}
+  .tl li{
+    display:grid; grid-template-columns:14px minmax(0,1fr); gap:10px;
+    padding-bottom:14px; position:relative;
+  }
+  .tl li::before{
+    content:""; grid-column:1; margin-top:5px; width:8px; height:8px; border-radius:50%;
+    background:var(--verdigris); border:2px solid var(--surface-2); box-shadow:0 0 0 1.5px var(--verdigris);
+  }
+  .tl li:not(:last-child)::after{
+    content:""; position:absolute; left:3.5px; top:16px; bottom:0; width:1px; background:var(--line-strong);
+  }
+  .tl .tw{font-size:13px}
+  .tl .tw b{font-weight:600}
+  .tl .tm{font-family:var(--mono); font-size:10.5px; color:var(--ink-3); margin-top:2px}
+  .acts{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line)}
+  .acts .btn{padding:9px 15px; font-size:13.5px}
+  .acts .btn.ok-b{background:var(--ok); border-color:var(--ok)}
+  .acts .btn.bad-b{background:var(--bad); border-color:var(--bad)}
+  .reqnote{
+    font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:11px;
+    border-left:2px solid var(--copper); padding-left:9px; line-height:1.5;
+  }
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line); background:var(--surface); padding-block:22px 34px}
+  footer .fin{
+    max-width:1180px; margin:0 auto; padding-inline:16px;
+    display:flex; flex-wrap:wrap; gap:18px 36px;
+  }
+  footer .col{min-width:210px; flex:1}
+  footer h4{
+    font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-3); margin:0 0 8px; font-weight:400;
+  }
+  footer p, footer li{font-size:12.5px; color:var(--ink-2); margin:0 0 6px; line-height:1.5}
+  footer ul{margin:0; padding-left:16px}
+  .hi{font-family:"IBM Plex Sans Devanagari",var(--body)}
+</style>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <b>KiloWattX</b>
+      <span class="sub">KYC on the web</span>
+    </div>
+    <span class="chip-proto">Prototype · no backend · fake data</span>
+    <div class="ctl">
+      <label for="viewSeg">View</label>
+      <div class="seg" id="viewSeg">
+        <button type="button" id="vCust" aria-pressed="true">Customer</button>
+        <button type="button" id="vAdm" aria-pressed="false">Admin review</button>
+      </div>
+    </div>
+    <div class="ctl" id="roleCtl">
+      <label for="roleSel">Who</label>
+      <select id="roleSel">
+        <option value="landowner">Land Owner — lease</option>
+        <option value="investor">Investor — investment</option>
+        <option value="trial">Investor — free trial</option>
+        <option value="commercial">Commercial User — PPA (KYB)</option>
+      </select>
+    </div>
+    <div class="ctl" id="outCtl">
+      <label for="outSel">Outcome</label>
+      <select id="outSel">
+        <option value="verified">Verified</option>
+        <option value="review">Manual review</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="ctl" id="langCtl">
+      <label for="langSeg">Lang</label>
+      <div class="seg" id="langSeg">
+        <button type="button" id="lEn" aria-pressed="true">EN</button>
+        <button type="button" id="lHi" aria-pressed="false" class="hi">हिं</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="rail-shell" id="railShell">
+  <div class="rail" id="rail"></div>
+</div>
+
+<div class="wrap">
+  <section class="split" id="custView">
+    <div>
+      <div class="frame">
+        <div class="chrome">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="urlbar"><span class="lock">&#9679;</span> <span id="urlText">kilowattx.com</span></div>
+        </div>
+        <div class="stage" id="stage"></div>
+      </div>
+      <div class="btnrow" id="navRow"></div>
+    </div>
+    <aside class="annot" id="annot"></aside>
+  </section>
+
+  <section class="adm" id="admView" hidden></section>
+</div>
+
+<footer>
+  <div class="fin">
+    <div class="col">
+      <h4>What this is</h4>
+      <p>A click-through of the whole KYC process as it runs on the web — the customer screens on the left, and on the right the endpoint, table writes, guard and vendor call sitting behind each one.</p>
+      <p>Nothing here calls a server. Every name, number, score and document is made up.</p>
+    </div>
+    <div class="col">
+      <h4>Built from</h4>
+      <ul>
+        <li>KiloWattX KYC Guide — 8 Oct 2026</li>
+        <li>KiloWattX Production Tech Stack — 7 Oct 2026</li>
+      </ul>
+      <p>Section references (§) point back to the stack doc.</p>
+    </div>
+    <div class="col">
+      <h4>Still open</h4>
+      <p>Aadhaar route (DigiLocker / OVSE / OTP eKYC), final vendor, who owns manual review, re-KYC policy, NRI investors. The flow is drawn so that each of these swaps behind an adapter without the screens changing.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ helpers ============ */
+  var E = function(s){ return String(s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); };
+
+  var state = { view:"cust", role:"landowner", outcome:"verified", lang:"en", step:0, selCase:"KYC-4471" };
+
+  function t(o){ return (state.lang === "hi" && o.hi) ? o.hi : o.en; }
+  function hiClass(){ return state.lang === "hi" ? ' class="hi"' : ""; }
+
+  /* portrait placeholders — drawn, not loaded (the CSP blocks external images) */
+  function portrait(opts){
+    var o = opts || {};
+    var skin = o.skin || "#C98E63", hair = o.hair || "#2B1F18", shirt = o.shirt || "#44565E";
+    var bg = o.bg || "#DFE5E3", id = "p" + Math.random().toString(36).slice(2,8);
+    var grain = o.old ? '<filter id="'+id+'"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/>' +
+      '<feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="0.17"/></feComponentTransfer></filter>' : "";
+    var over = o.old ? '<rect width="120" height="120" filter="url(#'+id+')" opacity="0.9"/>' +
+      '<rect width="120" height="120" fill="#8A8F86" opacity="0.14"/>' : "";
+    return '<svg viewBox="0 0 120 120" role="img" aria-label="' + E(o.alt || "Portrait placeholder") + '">' +
+      '<defs>' + grain + '</defs>' +
+      '<rect width="120" height="120" fill="' + bg + '"/>' +
+      '<path d="M18 120c0-21 19-31 42-31s42 10 42 31z" fill="' + shirt + '"/>' +
+      '<ellipse cx="60" cy="56" rx="25" ry="29" fill="' + skin + '"/>' +
+      '<path d="M35 50c0-19 11-27 25-27s25 8 25 27c-7-11-15-14-25-14s-18 3-25 14z" fill="' + hair + '"/>' +
+      '<ellipse cx="51" cy="56" rx="2.6" ry="3.2" fill="#23201D"/>' +
+      '<ellipse cx="69" cy="56" rx="2.6" ry="3.2" fill="#23201D"/>' +
+      '<path d="M53 71q7 5 14 0" stroke="#8A5B42" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      over + '</svg>';
+  }
+
+  function kv(rows){
+    return '<dl class="kv">' + rows.map(function(r){
+      return '<div class="kv-row"><dt>' + E(r[0]) + '</dt><dd>' + r[1] + '</dd></div>';
+    }).join("") + '</dl>';
+  }
+
+  /* ============ screen builders ============ */
+
+  function sGate(c){
+    return '<p class="eyebrow">' + E(c.eyebrow) + '</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t(c.title)) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t(c.lead)) + '</p>' +
+      '<div class="notice"><div class="nh">Blocked until KYC is done</div><ul>' +
+        c.needs.map(function(n){ return '<li>' + n + '</li>'; }).join("") +
+      '</ul></div>' +
+      kv([
+        ["Signed in as", '<b>' + E(c.subject) + '</b><small>' + E(c.subjectMeta) + '</small>'],
+        ["KYC status", '<span class="pill n">NOT_STARTED</span>'],
+        ["Server said", '<span class="mono">403 ' + E(c.code) + '</span>']
+      ]);
+  }
+
+  function sConsent(c){
+    return '<p class="eyebrow">Step 1 · DPDP consent</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({
+        en:"Before we verify you",
+        hi:"Verify karne se pehle"
+      })) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"We need your permission to check your identity. You choose, and you can take this permission back at any time.",
+        hi:"Aapki pehchaan jaanchne ke liye hamein aapki anumati chahiye. Faisla aapka hai, aur aap yeh anumati kabhi bhi wapas le sakte hain."
+      })) + '</p>' +
+      '<div class="notice"><div class="nh">' + E(t({en:"What you are agreeing to", hi:"Aap kis baat ke liye haan keh rahe hain"})) + '</div><ul' + hiClass() + '>' +
+        '<li><b>' + E(t({en:"What we check", hi:"Hum kya jaanchte hain"})) + ':</b> ' + E(t({en:c.checks.en, hi:c.checks.hi})) + '</li>' +
+        '<li><b>' + E(t({en:"Why", hi:"Kyun"})) + ':</b> ' + E(t(c.purpose)) + '</li>' +
+        '<li><b>' + E(t({en:"Who sees it", hi:"Kaun dekhta hai"})) + ':</b> ' + E(t({
+            en:"HyperVerge (Aadhaar + selfie) and Signzy (PAN, GST, CIN), both hosted in India.",
+            hi:"HyperVerge (Aadhaar + selfie) aur Signzy (PAN, GST, CIN) — dono India mein hosted."})) + '</li>' +
+        '<li><b>' + E(t({en:"How long", hi:"Kitne samay tak"})) + ':</b> ' + E(t({
+            en:"7 years, because tax law and a 25-year agreement require it.",
+            hi:"7 saal — tax niyam aur 25-saal ke agreement ki wajah se."})) + '</li>' +
+        '<li><b>' + E(t({en:"Your Aadhaar number", hi:"Aapka Aadhaar number"})) + ':</b> ' + E(t({
+            en:"never stored. We keep only the last 4 digits and a reference token.",
+            hi:"kabhi store nahi hota. Hum sirf aakhri 4 digit aur ek reference token rakhte hain."})) + '</li>' +
+      '</ul></div>' +
+      '<p class="lead" style="font-size:13px"' + hiClass() + '>' + E(t({
+        en:"Notice v2.1 · You can withdraw this from Settings → Privacy, and we will delete what the law does not force us to keep.",
+        hi:"Notice v2.1 · Settings → Privacy se aap ise wapas le sakte hain; jo kanoon ke liye zaroori nahi, woh hum delete kar denge."})) + '</p>';
+  }
+
+  function sAadhaar(){
+    return '<p class="eyebrow">Step 2 · Aadhaar</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Verify your Aadhaar", hi:"Aadhaar verify karein"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"Pick how you want to share it. Both routes give us your name, date of birth, address and photo — signed by the government, so nothing can be edited on the way.",
+        hi:"Chunein ki aap ise kaise share karna chahte hain. Dono tareeke se hamein aapka naam, janm-tithi, pata aur photo milta hai — sarkar dwara signed, isliye beech mein kuch badla nahi ja sakta."})) + '</p>' +
+      '<div class="choices">' +
+        '<button type="button" class="choice sel"><span class="radio"></span><span><span class="ct"' + hiClass() + '>' +
+          E(t({en:"Through DigiLocker", hi:"DigiLocker se"})) + '</span><span class="cd"' + hiClass() + '>' +
+          E(t({en:"Log in with an OTP on your Aadhaar-linked mobile. Gives Aadhaar and PAN in one consent.",
+               hi:"Aadhaar se linked mobile par OTP daal kar login karein. Ek hi consent mein Aadhaar aur PAN dono."})) +
+          '</span></span><span class="tag">Primary</span></button>' +
+        '<button type="button" class="choice"><span class="radio"></span><span><span class="ct"' + hiClass() + '>' +
+          E(t({en:"Through the Aadhaar App", hi:"Aadhaar App se"})) + '</span><span class="cd"' + hiClass() + '>' +
+          E(t({en:"Scan a QR code and share a verifiable credential. Use this if your mobile is not linked to Aadhaar.",
+               hi:"QR code scan karke credential share karein. Agar aapka mobile Aadhaar se linked nahi hai toh yeh chunein."})) +
+          '</span></span><span class="tag">Fallback</span></button>' +
+      '</div>' +
+      '<div class="field"><label>' + E(t({en:"DigiLocker is asking for", hi:"DigiLocker yeh maang raha hai"})) + '</label>' +
+        '<div class="inputbox ok"><span>Aadhaar e-KYC + PAN</span><span class="tick">' +
+        E(t({en:"Consent given", hi:"Consent diya"})) + '</span></div>' +
+        '<div class="hint">redirect &rarr; digilocker.gov.in &rarr; back to kilowattx.com</div></div>' +
+      kv([
+        ["Name", '<b>Ramesh Kumar Sharma</b><small>as held by UIDAI</small>'],
+        ["Date of birth", '<span class="mono">14-03-1979</span>'],
+        ["Aadhaar", '<span class="mono">XXXX XXXX 7731</span><small>last 4 digits only — the full number is never received by our server</small>'],
+        ["Address", 'Ward 7, Village Bagru, Jaipur, Rajasthan 303007']
+      ]);
+  }
+
+  function sPan(c){
+    var pan = c.pan || "ABCPS4412K";
+    return '<p class="eyebrow">' + E(c.panEyebrow || "Step 3 · PAN") + '</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Enter your PAN", hi:"Apna PAN daalein"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"We check it against the name and date of birth Aadhaar just gave us. You do not have to type those again.",
+        hi:"Hum ise Aadhaar se mile naam aur janm-tithi se match karte hain. Woh dobara likhne ki zaroorat nahi."})) + '</p>' +
+      '<div class="field"><label>' + E(t({en:"PAN number", hi:"PAN number"})) + '</label>' +
+        '<div class="inputbox ok"><span>' + E(pan) + '</span><span class="tick">Valid</span></div>' +
+        '<div class="hint">^[A-Z]{5}[0-9]{4}[A-Z]$ &middot; 4th char &ldquo;' + E(pan.charAt(3)) +
+        '&rdquo; = ' + E(c.holderType || "individual") + '</div></div>' +
+      '<h2>' + E(t({en:"What the Income Tax Department returned", hi:"Income Tax Department ne kya bhejaa"})) + '</h2>' +
+      kv([
+        ["PAN status", '<span class="pill g">VALID</span>'],
+        ["Name match", c.nameMatch === false
+          ? '<span class="pill r">N</span><small>&ldquo;' + E(c.panName || "R K Sharma") + '&rdquo; vs &ldquo;' + E(c.aadhaarName || "Ramesh Kumar Sharma") + '&rdquo; — goes to a reviewer</small>'
+          : '<span class="pill g">Y</span>'],
+        ["DOB match", '<span class="pill g">Y</span>'],
+        ["Aadhaar&ndash;PAN link", c.panLinked === false
+          ? '<span class="pill r">NOT LINKED</span><small>flagged for Finance (higher TDS under s.206AA) — not a block</small>'
+          : '<span class="pill g">LINKED</span>']
+      ]);
+  }
+
+  function sSelfie(c){
+    return '<p class="eyebrow">' + E(c.selfieEyebrow || "Step 4 · Selfie") + '</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Take a selfie", hi:"Ek selfie leejiye"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"Look straight at the camera and blink when asked. We compare this with the photo on your Aadhaar.",
+        hi:"Camera ki taraf seedha dekhein aur kaha jaaye toh palak jhapkayein. Hum ise aapke Aadhaar ki photo se match karte hain."})) + '</p>' +
+      '<div class="cam">' + portrait({alt:"Live camera preview placeholder", bg:"#CBD6D2"}) +
+        '<div class="oval"></div><div class="camhint"' + hiClass() + '>' +
+        E(t({en:"Blink slowly", hi:"Dheere se palak jhapkayein"})) + '</div></div>' +
+      '<h2>' + E(t({en:"Checks running on the camera feed", hi:"Camera feed par chal rahi jaanch"})) + '</h2>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"A real, live person — not a photo, screen or mask", hi:"Asli, zinda vyakti — photo, screen ya mask nahi"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"Enough light, face fully inside the frame", hi:"Paryapt roshni, chehra poora frame ke andar"})) + '</div>' +
+      '<div class="tickline pend"><i>&#8230;</i> ' + E(t({en:"Face match against the Aadhaar photo — decided on our server", hi:"Aadhaar photo se face match — faisla hamare server par"})) + '</div>';
+  }
+
+  function sLandDocs(){
+    return '<p class="eyebrow">Step 5 · Land ownership</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Prove you own the land", hi:"Zameen aapki hai, yeh saabit karein"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"Upload the registry papers for the parcel you want to lease. Our legal team reads these by hand, so give us the clearest scan you have.",
+        hi:"Jo zameen lease par deni hai, uske registry kaagaz upload karein. Hamari legal team inhe khud padhti hai, isliye saaf scan dein."})) + '</p>' +
+      '<div class="filerow"><span class="fi">PDF</span><span class="fn"><b>sale-deed-bagru-2011.pdf</b>' +
+        '<span>2.4 MB &middot; scanned &middot; no virus found</span></span><span class="pill g">Uploaded</span></div>' +
+      '<div class="filerow"><span class="fi">JPG</span><span class="fn"><b>jamabandi-khasra-114-7.jpg</b>' +
+        '<span>1.1 MB &middot; scanned &middot; no virus found</span></span><span class="pill g">Uploaded</span></div>' +
+      '<div class="dropzone"><div class="dz-t"' + hiClass() + '>' +
+        E(t({en:"Add a khasra-khatauni or mutation record", hi:"Khasra-khatauni ya mutation record jodein"})) +
+        '</div><div class="dz-s">PDF, JPG or PNG &middot; up to 25 MB</div></div>' +
+      '<h2>' + E(t({en:"Read off your documents", hi:"Aapke dastavezon se padha gaya"})) + '</h2>' +
+      kv([
+        ["Khasra number", '<span class="mono">114/7</span><small>matched to parcel #RJ-JPR-00482 on the map</small>'],
+        ["Area", '<span class="mono">4.80</span> acres<small>lease needs at least 4 acres</small>'],
+        ["Owner on record", 'Ramesh Kumar Sharma<small>father&rsquo;s name differs from the Aadhaar record — a reviewer will decide</small>'],
+        ["Co-owners", '<span class="pill n">NONE DECLARED</span><small>if there were any, each one does their own KYC and signs the lease</small>']
+      ]);
+  }
+
+  function sGstin(){
+    return '<p class="eyebrow">Step 2 · GSTIN</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Your GST number", hi:"Aapka GST number"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"One number tells us your legal name, your constitution, your state and your business PAN. Nothing else to type.",
+        hi:"Ek number se hamein aapka legal naam, constitution, rajya aur business PAN mil jaata hai. Aur kuch likhna nahi padega."})) + '</p>' +
+      '<div class="field"><label>GSTIN</label>' +
+        '<div class="inputbox ok"><span>08AADCS9012F1ZH</span><span class="tick">Checksum ok</span></div>' +
+        '<div class="hint">08 = Rajasthan &middot; chars 3&ndash;12 = business PAN AADCS9012F</div></div>' +
+      '<h2>' + E(t({en:"What the GST registry returned", hi:"GST registry ne kya bhejaa"})) + '</h2>' +
+      kv([
+        ["Legal name", '<b>Shreeji Textiles Private Limited</b>'],
+        ["Trade name", 'Shreeji Fabrics'],
+        ["Status", '<span class="pill g">ACTIVE</span><small>Cancelled or Suspended would end the application here</small>'],
+        ["Constitution", 'Private Limited Company<small>so we also need your CIN</small>'],
+        ["Registered since", '<span class="mono">19-07-2017</span>'],
+        ["Business PAN", '<span class="mono">AADCS9012F</span><small>taken out of the GSTIN and verified — we never ask for it separately</small>'],
+        ["Registered address", 'Plot 44, RIICO Industrial Area, Bagru, Jaipur, Rajasthan 303007<small>same district as the factory site on the map</small>']
+      ]);
+  }
+
+  function sGstCert(){
+    return '<p class="eyebrow">Step 3 · GST certificate</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Upload your GST certificate", hi:"GST certificate upload karein"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"We read the fields off it so you do not have to fill a form. Anything we are unsure about, we leave for a person to check.",
+        hi:"Hum iske fields khud padh lete hain, taaki aapko form na bharna pade. Jis par shak ho, woh hum kisi vyakti ke liye chhod dete hain."})) + '</p>' +
+      '<div class="filerow"><span class="fi">PDF</span><span class="fn"><b>gst-reg-08AADCS9012F1ZH.pdf</b>' +
+        '<span>640 KB &middot; scanned &middot; no virus found</span></span><span class="pill g">Read</span></div>' +
+      '<h2>' + E(t({en:"Read off the certificate", hi:"Certificate se padha gaya"})) + '</h2>' +
+      kv([
+        ["Legal name", 'Shreeji Textiles Private Limited <span class="pill g">0.98</span>'],
+        ["GSTIN", '<span class="mono">08AADCS9012F1ZH</span> <span class="pill g">0.96</span><small>matches what you typed and what the registry says</small>'],
+        ["Constitution", 'Private Limited Company <span class="pill g">0.94</span>'],
+        ["Date of registration", '<span class="mono">19-07-2017</span> <span class="pill g">0.91</span>'],
+        ["Principal place", 'Plot 44, RIICO Indl. Area&hellip; <span class="pill r">0.71</span><small>below 0.85, so this one is pre-filled but marked for a reviewer</small>']
+      ]) +
+      '<p class="lead" style="margin-top:18px; font-size:13px"' + hiClass() + '>' + E(t({
+        en:"One field is unsure. Two or more and the whole application would go for review.",
+        hi:"Ek field par shak hai. Do ya zyada hote toh poora application review mein chala jaata."})) + '</p>';
+  }
+
+  function sCin(){
+    return '<p class="eyebrow">Step 4 · Company</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Confirm the company", hi:"Company confirm karein"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"Because you are a private limited company, we also check you against the Ministry of Corporate Affairs register.",
+        hi:"Aap private limited company hain, isliye hum Ministry of Corporate Affairs ke register se bhi jaanch karte hain."})) + '</p>' +
+      '<div class="field"><label>CIN</label>' +
+        '<div class="inputbox ok"><span>U17299RJ2017PTC058441</span><span class="tick">Format ok</span></div>' +
+        '<div class="hint">^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$ &middot; an LLP would give an LLPIN instead</div></div>' +
+      '<h2>' + E(t({en:"What the MCA register returned", hi:"MCA register ne kya bhejaa"})) + '</h2>' +
+      kv([
+        ["Company name", '<b>Shreeji Textiles Private Limited</b><small>same as the GST legal name</small>'],
+        ["Status", '<span class="pill g">ACTIVE</span>'],
+        ["Incorporated", '<span class="mono">11-05-2017</span>'],
+        ["Directors", 'Nikhil Desai, Meera Desai<small>whoever signs the PPA has to appear here, or bring a board resolution</small>']
+      ]);
+  }
+
+  function sSignatory(){
+    return '<p class="eyebrow">Step 5 · Who signs</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"The person signing the PPA", hi:"PPA par dastakhat karne wala vyakti"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"A 25-year agreement is only safe if the right person signs it. So the signatory does their own Aadhaar, PAN and selfie, and shows us what gives them the authority.",
+        hi:"25 saal ka agreement tabhi surakshit hai jab sahi vyakti dastakhat kare. Isliye signatory apna Aadhaar, PAN aur selfie karta hai, aur apna adhikaar bhi dikhata hai."})) + '</p>' +
+      kv([
+        ["Signatory", '<b>Nikhil Desai</b><small>Director &middot; listed on the MCA register</small>'],
+        ["Aadhaar", '<span class="pill g">VERIFIED</span> <span class="mono">XXXX XXXX 2214</span>'],
+        ["PAN", '<span class="pill g">VERIFIED</span> <span class="mono">ABKPD7781C</span><small>4th char &ldquo;P&rdquo; = individual, as expected</small>'],
+        ["Selfie", '<span class="pill g">LIVENESS PASS</span> <span class="pill g">FACE 0.93</span>'],
+        ["Proof of authority", 'board-resolution-2026-03.pdf<small>our legal team reads this one by hand</small>']
+      ]) +
+      '<div class="notice" style="margin-top:20px"><div class="nh">' +
+        E(t({en:"Reused, not repeated", hi:"Dobara nahi, wahi istemaal"})) + '</div><ul' + hiClass() + '><li>' +
+        E(t({en:"Nikhil already did this KYC as an investor in March. Aadhaar, PAN and the selfie were carried over; only the proof of authority is new.",
+             hi:"Nikhil ne March mein investor ke roop mein yeh KYC kar liya tha. Aadhaar, PAN aur selfie wahi chal gaye; sirf authority ka proof naya hai."})) +
+      '</li></ul></div>';
+  }
+
+  function sPanOnly(){
+    return '<p class="eyebrow">Step 2 · PAN only</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"One quick check", hi:"Ek chhoti si jaanch"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"The 15-day trial needs only your PAN. Aadhaar and the selfie come later, when you actually invest.",
+        hi:"15 din ke trial ke liye sirf aapka PAN chahiye. Aadhaar aur selfie baad mein, jab aap asal mein invest karenge."})) + '</p>' +
+      '<div class="field"><label>PAN number</label>' +
+        '<div class="inputbox ok"><span>AMJPM1182Q</span><span class="tick">Valid</span></div>' +
+        '<div class="hint">4th char &ldquo;P&rdquo; = individual</div></div>' +
+      '<div class="field"><label>' + E(t({en:"Mobile", hi:"Mobile"})) + '</label>' +
+        '<div class="inputbox ok"><span>+91 98&bull;&bull;&bull; &bull;&bull;421</span><span class="tick">' +
+        E(t({en:"Verified earlier", hi:"Pehle verify hua"})) + '</span></div></div>' +
+      '<h2>' + E(t({en:"Trial rules we are applying", hi:"Trial ke niyam jo lag rahe hain"})) + '</h2>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"PAN is valid and operative", hi:"PAN valid aur operative hai"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"This PAN has not taken a trial before", hi:"Is PAN par pehle trial nahi liya gaya"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"This phone number has not taken a trial before", hi:"Is phone number par pehle trial nahi liya gaya"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"The device looks genuine", hi:"Device asli lag raha hai"})) + '</div>';
+  }
+
+  function sWaiting(){
+    return '<p class="eyebrow">' + E(t({en:"Almost done", hi:"Lagbhag ho gaya"})) + '</p>' +
+      '<h1 class="screen-title"' + hiClass() + '>' + E(t({en:"Checking your details", hi:"Aapki details jaanchi ja rahi hain"})) + '</h1>' +
+      '<p class="lead"' + hiClass() + '>' + E(t({
+        en:"This usually takes under a minute. You can close this page — we will send you a message either way.",
+        hi:"Aam taur par ek minute se kam lagta hai. Aap yeh page band kar sakte hain — hum aapko sandesh bhej denge."})) + '</p>' +
+      '<div class="spin" role="status" aria-label="Checking"></div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"Aadhaar received from DigiLocker", hi:"DigiLocker se Aadhaar mil gaya"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"PAN checked", hi:"PAN jaanch liya"})) + '</div>' +
+      '<div class="tickline"><i>&#10003;</i> ' + E(t({en:"Selfie checked", hi:"Selfie jaanch li"})) + '</div>' +
+      '<div class="tickline pend"><i>&#8230;</i> ' + E(t({en:"Putting it all together", hi:"Sab kuch jod kar faisla liya ja raha hai"})) + '</div>' +
+      '<p class="lead" style="margin-top:22px; font-size:13px"' + hiClass() + '>' + E(t({
+        en:"What your browser saw does not decide this. Our server waits for the signed result from the vendor and decides on its own.",
+        hi:"Aapke browser ne jo dekha, usse faisla nahi hota. Hamara server vendor se signed nateeja aane ka intezaar karta hai aur khud faisla leta hai."})) + '</p>';
+  }
+
+  function sResult(c){
+    var o = state.outcome, v = c.verdicts[o];
+    var cls = o === "verified" ? "ok" : (o === "review" ? "warn" : "bad");
+    var mark = o === "verified" ? "&#10003;" : (o === "review" ? "!" : "&times;");
+    var out = '<p class="eyebrow">' + E(t({en:"Result", hi:"Nateeja"})) + '</p>' +
+      '<div class="verdict ' + cls + '"><span class="vi">' + mark + '</span><span>' +
+        '<span class="vt"' + hiClass() + '>' + E(t(v.title)) + '</span>' +
+        '<span class="vs"' + hiClass() + '>' + E(t(v.sub)) + '</span></span></div>';
+    if (v.reasons && v.reasons.length){
+      out += '<h2>' + E(t({en:"Why", hi:"Kyun"})) + '</h2><ul class="reasons">' +
+        v.reasons.map(function(r){ return '<li><code>' + E(r[0]) + '</code><span>' + E(r[1]) + '</span></li>'; }).join("") +
+        '</ul>';
+    }
+    out += '<h2>' + E(t({en:"Your record now", hi:"Aapka record ab"})) + '</h2>' +
+      kv([
+        ["KYC status", '<span class="pill ' + (o === "verified" ? "g" : (o === "review" ? "r" : "b")) + '">' + E(v.status) + '</span>'],
+        [c.gateLabel, v.unlocked
+          ? '<span class="pill g">UNLOCKED</span>'
+          : '<span class="pill n">STILL LOCKED</span><small>' + E(t(v.gateNote)) + '</small>'],
+        ["You were told by", E(t({en:"WhatsApp, push, and this page updating itself", hi:"WhatsApp, push, aur yeh page khud update hokar"}))]
+      ]);
+    return out;
+  }
+
+  /* ============ flows ============ */
+
+  var ANNOT = {
+    gate: {
+      name:"Guard, before anything",
+      api:[["GET","/v1/kyc/me"]],
+      writes:[],
+      core:"can(user, action, resource)",
+      rules:[
+        ["Hiding the button is only for looks. The real block is this guard in the API — without it, anyone could call the endpoint directly. <b>§10</b>"],
+        ["<code>/v1/kyc/me</code> returns the status and the steps left, with every value masked. It never returns a full PAN or Aadhaar."],
+        ["Errors use one shape everywhere: <code>{ code, message, details }</code>. <b>§9</b>"]
+      ]
+    },
+    consent: {
+      name:"Consent, written down",
+      api:[["POST","/v1/kyc/consents"]],
+      writes:["consent_records"],
+      core:null,
+      rules:[
+        ["One row per purpose, with the <code>notice_version</code> the person actually saw — so we can prove later what they agreed to. <b>§21</b>"],
+        ["Withdrawing consent writes <code>withdrawn_at</code> and starts the deletion job for anything the law does not force us to keep."],
+        ["The DPDP Rules were notified on 13 Nov 2025 and the duties bite by 13 May 2027 — which is roughly when investor KYC ships, so this is built in from the start, not retrofitted."]
+      ]
+    },
+    session: {
+      name:"Session, and the Aadhaar route",
+      api:[["POST","/v1/kyc/sessions"]],
+      writes:["kyc_records","kyc_checks"],
+      core:"KycProvider.createSession()",
+      rules:[
+        ["Sent with an <code>Idempotency-Key</code>, so a double-click or a retry never opens a second paid vendor session."],
+        ["<code>kyc_records.status</code> moves to <code>IN_PROGRESS</code>. The browser gets a short-lived token; our vendor API key stays on the server. <b>§21</b>"],
+        ["The full 12-digit Aadhaar number never reaches our database, our logs, Sentry, PostHog or the object store. We keep <code>aadhaar_last4</code> and <code>aadhaar_ref_token</code> and nothing more. <b>§21</b>", "danger"],
+        ["Which route this is — DigiLocker, the Aadhaar App (OVSE) or OTP eKYC — is still open with Legal. All three sit behind <code>KycProvider</code>, so the screens do not change when it is settled."]
+      ]
+    },
+    pan: {
+      name:"PAN, in the right order",
+      api:[["POST","/v1/kyc/pan-check"]],
+      writes:["kyc_checks"],
+      core:"KybProvider.verifyPan()",
+      rules:[
+        ["The PAN service never sends a name back. It only answers yes or no to a name we send it — so Aadhaar has to come first, or we would be checking against whatever the user typed."],
+        ["Stored as <code>pan_encrypted</code> (envelope encryption) plus <code>pan_blind_index</code> = HMAC-SHA256 of the normalised PAN, with a unique index. That is how we answer &ldquo;has this PAN been used before?&rdquo; without ever decrypting. <b>§21</b>"],
+        ["A plain SHA-256 would not do: PANs follow a short fixed pattern and a plain hash of one can be brute-forced.", "danger"],
+        ["An inoperative PAN is flagged for Finance, not blocked — it changes the TDS rate, not the person&rsquo;s identity."]
+      ]
+    },
+    panTrial: {
+      name:"The cheap check first",
+      api:[["POST","/v1/kyc/pan-check"]],
+      writes:["kyc_records","kyc_checks"],
+      core:"core.canStartTrial()",
+      rules:[
+        ["A trial costs us one PAN lookup. Full KYC — Aadhaar, selfie, face match — only happens when real money moves. That ordering is most of the KYC bill. <b>§10</b>"],
+        ["<code>level = PAN_ONLY</code>. The same person later reaches <code>FULL</code> without redoing this step."],
+        ["The duplicate check is a unique index hit on <code>pan_blind_index</code> — one trial per PAN, and per phone."],
+        ["Play Integrity and App Attest stop the same person farming trials from faked devices. <b>§5</b>"]
+      ]
+    },
+    selfie: {
+      name:"Liveness and face match",
+      api:[],
+      writes:["kyc_checks"],
+      core:"KycProvider — vendor SDK in the browser",
+      rules:[
+        ["The vendor says it plainly, and so do we: the result the browser sees is for showing a spinner. It is never the basis for a decision.", "danger"],
+        ["Aadhaar photos are often years old and low quality, so a weak face match will be the commonest reason a case goes to a human. Reviewers get the two photos side by side for exactly this."],
+        ["The pass mark lives in the <code>settings</code> table, so Ops can move it without a release. Start at the vendor&rsquo;s number and revisit after the first 50 cases. <b>§7, §16</b>"],
+        ["Three failed liveness attempts trigger a cool-off and a fraud flag."]
+      ]
+    },
+    docs: {
+      name:"Documents, and the pipeline behind them",
+      api:[["POST","/v1/files/upload-url"],["PUT","(direct to the bucket)"]],
+      writes:["documents"],
+      core:"worker: virus scan &rarr; extract &rarr; compare",
+      rules:[
+        ["The file goes browser &rarr; bucket on a presigned URL. It never passes through the API server. <b>§17</b>"],
+        ["A bucket event starts the worker: virus scan, then read the fields, then compare them with what the registry said and what the user typed."],
+        ["The <code>kyc-docs</code> bucket is private, signed URLs are short-lived, retention is 7 years, and every single view or download is written to <code>audit_log</code>. <b>§17, §21</b>"],
+        ["The khasra number is matched to a PostGIS parcel in <code>land_parcels</code>, so the paper and the map agree. <b>§11</b>"],
+        ["Name matching on land records is genuinely hard — spellings vary and father&rsquo;s names differ — so this stays a human decision, not a score."]
+      ]
+    },
+    gstin: {
+      name:"One number, four facts",
+      api:[["POST","/v1/kyb/organisations"]],
+      writes:["organisations","kyc_checks"],
+      core:"KybProvider.lookupGstin()",
+      rules:[
+        ["Zod checks the format and the last-character checksum before we spend a vendor call. <b>packages/validation</b>"],
+        ["Characters 3 to 12 of a GSTIN <em>are</em> the business PAN, and the first two are the state code. So we derive and verify the PAN for free and never ask for it."],
+        ["The GSTIN is matched from three directions: what was typed, what the certificate shows, what the registry returns."],
+        ["Cancelled or Suspended ends it — that is a hard fail, not a review.", "danger"]
+      ]
+    },
+    gstCert: {
+      name:"Reading the certificate",
+      api:[["POST","/v1/files/upload-url"]],
+      writes:["documents"],
+      core:"OCR extraction, in an Indian region",
+      rules:[
+        ["0.85 confidence or better is pre-filled. Two or more fields below that, and the whole case goes to a human. <b>§16</b>"],
+        ["Whichever extraction service is chosen has to run in an Indian region, so the document never leaves India. <b>§1, §21</b>"],
+        ["This is the AI ground rule in practice: the extraction lands in a suggestions table with its inputs, its confidence and the vendor version. Only <code>packages/core</code> changes a KYC status. <b>§16</b>", "danger"]
+      ]
+    },
+    cin: {
+      name:"The company register",
+      api:[["POST","/v1/kyb/organisations"]],
+      writes:["organisations","kyc_checks"],
+      core:"KybProvider.lookupCin()",
+      rules:[
+        ["Which register we call follows from the constitution the GST lookup gave us: a company &rarr; CIN, an LLP &rarr; LLPIN, a proprietorship &rarr; the owner&rsquo;s own personal KYC <em>is</em> the business check."],
+        ["The MCA name has to agree with the GST legal name."],
+        ["The director list is what lets us test whether the person signing is allowed to sign."]
+      ]
+    },
+    signatory: {
+      name:"Authority to sign",
+      api:[["POST","/v1/kyc/sessions"]],
+      writes:["org_members","documents","kyc_records"],
+      core:"can(user,'esign',ppa)",
+      rules:[
+        ["KYC belongs to a person, not a role. A verified investor becoming a signatory keeps their Aadhaar, PAN and selfie and adds only the proof of authority. <b>§9</b>"],
+        ["<code>org_members</code> ties the person to the business with <code>role = SIGNATORY</code> and the document that proves it."],
+        ["Legal reads the board resolution or authorisation letter by hand. Two separate gates have to pass before the PPA opens: the business is real, and this person may bind it."]
+      ]
+    },
+    decide: {
+      name:"The only place the status changes",
+      api:[["HOOK","/v1/webhooks/kyc/:vendor"]],
+      writes:["kyc_records","kyc_checks","documents","outbox_events","audit_log"],
+      core:"core.decideKyc()",
+      rules:[
+        ["Signature checked, replay rejected, then we fetch the full result server-to-server and store the raw response encrypted in the object store. We do not trust the webhook body alone. <b>§21</b>"],
+        ["<code>decideKyc()</code> weighs the Aadhaar result, PAN status and name/DOB match, liveness, face score, name-match score, age, duplicate PAN and device signals, and returns <code>VERIFIED</code>, <code>MANUAL_REVIEW</code> with reasons, or <code>REJECTED</code>."],
+        ["All five tables are written in one Drizzle transaction. Either the whole decision lands or none of it does. <b>§9</b>"],
+        ["The worker reads <code>outbox_events</code> and sends the push, the WhatsApp message and the live update. Handlers are keyed by event id, so a retry cannot notify twice. <b>§3</b>"],
+        ["A reconciliation job sweeps sessions stuck in <code>IN_PROGRESS</code> and asks the vendor directly — webhooks do get lost."]
+      ]
+    },
+    result: {
+      name:"What the status unlocks",
+      api:[["GET","/v1/kyc/me"]],
+      writes:[],
+      core:"can(user, action, resource)",
+      rules:[
+        ["<code>kyc_records</code> holds the overall status; each check keeps its own status too, so one failed piece does not erase a passed one."],
+        ["Age under 18, a fake or deactivated PAN, and a cancelled GST are hard fails — straight to <code>REJECTED</code>, no review."],
+        ["Only an Admin can move a case to <code>BLOCKED</code>, with a second person approving. Every status change writes an <code>audit_log</code> row and an outbox event. <b>§9</b>"],
+        ["A property test holds the line that matters most: nothing goes from <code>REJECTED</code> to <code>VERIFIED</code> without a recorded review action. <b>§22</b>"]
+      ]
+    }
+  };
+
+  var FLOWS = {
+    landowner: {
+      url:"kilowattx.com/land/lease/RJ-JPR-00482/sign",
+      subject:"Ramesh Kumar Sharma",
+      subjectMeta:"Land Owner · 4.8 acres at Bagru, Jaipur",
+      gateLabel:"Lease e-sign",
+      ctx:{
+        eyebrow:"Lease agreement · step 4 of 5",
+        title:{en:"We need to verify you before you sign", hi:"Dastakhat se pehle hamein aapko verify karna hoga"},
+        lead:{en:"This lease runs for 25 years. That alone makes it worth a few minutes now.",
+              hi:"Yeh lease 25 saal chalega. Isi wajah se abhi kuch minute dena theek hai."},
+        needs:[
+          "Your <b>Aadhaar</b>, so the person signing is really you",
+          "Your <b>PAN</b>, because rent is paid after TDS",
+          "A <b>selfie</b>, matched against your Aadhaar photo",
+          "Your <b>land papers</b>, so we know the land is yours to lease"
+        ],
+        code:"KYC_REQUIRED",
+        checks:{en:"Aadhaar, PAN, a selfie and your land papers.",
+                hi:"Aadhaar, PAN, ek selfie aur aapke zameen ke kaagaz."},
+        purpose:{en:"To confirm who you are and that the land is yours to lease.",
+                 hi:"Yeh pakka karne ke liye ki aap kaun hain aur zameen aapki hai."},
+        pan:"ABCPS4412K",
+        holderType:"individual",
+        verdicts:{
+          verified:{ status:"VERIFIED", unlocked:true,
+            title:{en:"You are verified", hi:"Aap verify ho gaye"},
+            sub:{en:"The lease is open for signing.",
+                 hi:"Lease dastakhat ke liye khul gaya hai."} },
+          review:{ status:"MANUAL_REVIEW", unlocked:false,
+            title:{en:"A colleague is looking at this", hi:"Hamara ek sathi ise dekh raha hai"},
+            sub:{en:"Nothing is wrong. Two things did not line up neatly enough for us to decide automatically, so a person will. Usually within a working day.",
+                 hi:"Kuch galat nahi hai. Do cheezein itni saaf nahi milin ki machine faisla kar le, isliye ek vyakti karega — aam taur par ek kaam-din mein."},
+            gateNote:{en:"opens as soon as the review is approved", hi:"review approve hote hi khul jaayega"},
+            reasons:[
+              ["FACE_MATCH_LOW","Selfie scored 0.68 against the Aadhaar photo; the pass mark is 0.75. Aadhaar photos are often old."],
+              ["LAND_NAME_MISMATCH","The father's name on the jamabandi does not match the Aadhaar record."],
+              ["DOCUMENT_LOW_CONFIDENCE","One address field on the deed was read at 0.71."]
+            ] },
+          rejected:{ status:"REJECTED", unlocked:false,
+            title:{en:"We cannot verify you", hi:"Hum aapko verify nahi kar sakte"},
+            sub:{en:"The PAN you gave has been deactivated by the Income Tax Department. Please sort that out with them and come back — we will keep your land papers.",
+                 hi:"Jo PAN aapne diya woh Income Tax Department ne deactivate kar diya hai. Kripya unse theek karwa kar wapas aayein — aapke zameen ke kaagaz hum rakh lenge."},
+            gateNote:{en:"stays locked until a valid PAN is verified", hi:"valid PAN verify hone tak band rahega"},
+            reasons:[["PAN_DEACTIVATED","A deactivated PAN is a hard fail — it does not go to review."]] }
+        }
+      },
+      steps:[
+        { nav:"Gate",      build:sGate,     annot:ANNOT.gate },
+        { nav:"Consent",   build:sConsent,  annot:ANNOT.consent },
+        { nav:"Aadhaar",   build:sAadhaar,  annot:ANNOT.session },
+        { nav:"PAN",       build:sPan,      annot:ANNOT.pan },
+        { nav:"Selfie",    build:sSelfie,   annot:ANNOT.selfie },
+        { nav:"Land docs", build:sLandDocs, annot:ANNOT.docs },
+        { nav:"Deciding",  build:sWaiting,  annot:ANNOT.decide },
+        { nav:"Result",    build:sResult,   annot:ANNOT.result }
+      ]
+    },
+
+    investor: {
+      url:"kilowattx.com/invest/bagru-1mw/checkout",
+      subject:"Priya Nair",
+      subjectMeta:"Investor · 12 units in Bagru 1 MW · ₹1,80,000",
+      gateLabel:"Investment",
+      ctx:{
+        eyebrow:"Checkout · step 2 of 4",
+        title:{en:"One check before you invest", hi:"Invest karne se pehle ek jaanch"},
+        lead:{en:"You are about to put real money into a project and start earning bill credits you can later resell. We have to know who you are first.",
+              hi:"Aap ek project mein asli paisa lagane ja rahi hain aur bill credits kamana shuru karengi jinhe baad mein bech bhi sakti hain. Pehle hamein pata hona chahiye ki aap kaun hain."},
+        needs:[
+          "Your <b>Aadhaar</b>, to confirm it is really you investing",
+          "Your <b>PAN</b>, required for tax on what you earn",
+          "A <b>selfie</b>, matched against your Aadhaar photo"
+        ],
+        code:"KYC_REQUIRED",
+        checks:{en:"Aadhaar, PAN and a selfie.", hi:"Aadhaar, PAN aur ek selfie."},
+        purpose:{en:"To let you invest, hold units and earn credits.",
+                 hi:"Taaki aap invest kar sakein, units rakh sakein aur credits kama sakein."},
+        pan:"AMJPN3301R",
+        holderType:"individual",
+        verdicts:{
+          verified:{ status:"VERIFIED", unlocked:true,
+            title:{en:"You are verified", hi:"Aap verify ho gayin"},
+            sub:{en:"Back to where you left off — your 12 units are still held for you.",
+                 hi:"Jahan se chhoda tha wahin wapas — aapke 12 units abhi bhi aapke liye rake hue hain."} },
+          review:{ status:"MANUAL_REVIEW", unlocked:false,
+            title:{en:"A colleague is looking at this", hi:"Hamara ek sathi ise dekh raha hai"},
+            sub:{en:"Your unit hold is extended while we look. You will hear from us within a working day.",
+                 hi:"Jab tak hum dekh rahe hain, aapke units ka hold badha diya gaya hai. Ek kaam-din mein jawab milega."},
+            gateNote:{en:"unit hold extended until the review closes", hi:"review band hone tak unit hold badha diya gaya"},
+            reasons:[
+              ["PAN_NAME_MISMATCH","PAN says “Priya Menon”, Aadhaar says “Priya Nair”. A name change after marriage is the usual explanation."],
+              ["FACE_MATCH_LOW","Selfie scored 0.72 against the Aadhaar photo; the pass mark is 0.75."]
+            ] },
+          rejected:{ status:"REJECTED", unlocked:false,
+            title:{en:"You need to be 18 to invest", hi:"Invest karne ke liye 18 saal hona zaroori hai"},
+            sub:{en:"Your Aadhaar shows a date of birth in 2009. An agreement with a minor cannot be enforced, so we cannot take this further. Nothing has been charged.",
+                 hi:"Aapke Aadhaar mein janm-tithi 2009 ki hai. Nabalig ke saath agreement laagu nahi hota, isliye hum aage nahi badh sakte. Koi paisa nahi liya gaya."},
+            gateNote:{en:"a hard fail — this does not go to a reviewer", hi:"hard fail — yeh review mein nahi jaata"},
+            reasons:[["AGE_UNDER_18","Checked against the Aadhaar date of birth, before any vendor cost is spent."]] }
+        }
+      },
+      steps:[
+        { nav:"Gate",     build:sGate,    annot:ANNOT.gate },
+        { nav:"Consent",  build:sConsent, annot:ANNOT.consent },
+        { nav:"Aadhaar",  build:sAadhaar, annot:ANNOT.session },
+        { nav:"PAN",      build:sPan,     annot:ANNOT.pan },
+        { nav:"Selfie",   build:sSelfie,  annot:ANNOT.selfie },
+        { nav:"Deciding", build:sWaiting, annot:ANNOT.decide },
+        { nav:"Result",   build:sResult,  annot:ANNOT.result }
+      ]
+    },
+
+    trial: {
+      url:"kilowattx.com/invest/trial/start",
+      subject:"Arjun Mehta",
+      subjectMeta:"Guest · starting the 15-day free trial",
+      gateLabel:"Free trial",
+      ctx:{
+        eyebrow:"Free trial · step 1 of 2",
+        title:{en:"Start your 15-day trial", hi:"Apna 15-din ka trial shuru karein"},
+        lead:{en:"The trial is free and needs no money, no Aadhaar and no selfie. We only check your PAN, so that one person cannot take the trial again and again.",
+              hi:"Trial muft hai — na paisa, na Aadhaar, na selfie. Hum sirf aapka PAN jaanchte hain, taaki ek vyakti baar-baar trial na le sake."},
+        needs:[
+          "Your <b>PAN</b>, checked once — the cheapest check we have",
+          "Your <b>mobile number</b>, already verified when you signed up"
+        ],
+        code:"KYC_REQUIRED",
+        checks:{en:"Your PAN only.", hi:"Sirf aapka PAN."},
+        purpose:{en:"To give you one free trial, and only one.", hi:"Aapko ek muft trial dene ke liye — aur sirf ek."},
+        verdicts:{
+          verified:{ status:"PAN_ONLY · VERIFIED", unlocked:true,
+            title:{en:"Your trial has started", hi:"Aapka trial shuru ho gaya"},
+            sub:{en:"15 days, 4 units held for you, no payment. Full KYC comes later, only if you decide to invest.",
+                 hi:"15 din, 4 units aapke liye rake gaye, koi payment nahi. Poora KYC baad mein — tabhi jab aap invest karne ka faisla karein."} },
+          review:{ status:"MANUAL_REVIEW", unlocked:false,
+            title:{en:"This PAN is already on another account", hi:"Yeh PAN pehle se kisi dusre account par hai"},
+            sub:{en:"Someone has already taken a trial with this PAN. If that account is yours, our team can merge the two — we have passed it on.",
+                 hi:"Is PAN se pehle hi trial liya gaya hai. Agar woh account aapka hai toh hamari team dono ko jod sakti hai — hum unhe bata chuke hain."},
+            gateNote:{en:"one trial per PAN, one per phone", hi:"ek PAN par ek trial, ek phone par ek"},
+            reasons:[["PAN_ALREADY_USED","A unique index on pan_blind_index caught it — without ever decrypting a stored PAN."]] },
+          rejected:{ status:"REJECTED", unlocked:false,
+            title:{en:"We could not check that PAN", hi:"Hum us PAN ko jaanch nahi sake"},
+            sub:{en:"The Income Tax Department does not recognise this number. Check the ten characters and try again.",
+                 hi:"Income Tax Department is number ko nahi pehchanta. Dus characters dobara dekh kar koshish karein."},
+            gateNote:{en:"stays locked until a valid PAN is given", hi:"valid PAN dene tak band rahega"},
+            reasons:[["PAN_INVALID","A fake or non-existent PAN is a hard fail."]] }
+        }
+      },
+      steps:[
+        { nav:"Gate",    build:sGate,     annot:ANNOT.gate },
+        { nav:"Consent", build:sConsent,  annot:ANNOT.consent },
+        { nav:"PAN",     build:sPanOnly,  annot:ANNOT.panTrial },
+        { nav:"Result",  build:sResult,   annot:ANNOT.result }
+      ]
+    },
+
+    commercial: {
+      url:"kilowattx.com/commercial/ppa/SHR-0441/sign",
+      subject:"Shreeji Textiles Pvt Ltd",
+      subjectMeta:"Commercial User · 480 kW rooftop, Bagru · signatory Nikhil Desai",
+      gateLabel:"PPA e-sign",
+      ctx:{
+        eyebrow:"Power purchase agreement · step 3 of 5",
+        title:{en:"We need to verify your business", hi:"Hamein aapka business verify karna hoga"},
+        lead:{en:"Two separate questions, and both have to pass: is the business real, and is the person signing allowed to bind it for 25 years?",
+              hi:"Do alag sawaal, aur dono ka jawab haan hona chahiye: business asli hai, aur dastakhat karne wala vyakti 25 saal ke liye use baandh sakta hai?"},
+        needs:[
+          "Your <b>GSTIN</b>, which also gives us your business PAN",
+          "Your <b>GST certificate</b>, which we read instead of asking you to fill a form",
+          "Your <b>CIN</b>, checked against the MCA register",
+          "<b>Personal KYC of whoever signs</b>, plus what gives them the authority"
+        ],
+        code:"KYB_REQUIRED",
+        checks:{en:"GSTIN, your GST certificate, CIN, and the signatory's Aadhaar, PAN and selfie.",
+                hi:"GSTIN, aapka GST certificate, CIN, aur signatory ka Aadhaar, PAN aur selfie."},
+        purpose:{en:"To sign the PPA and raise GST invoices on the right GSTIN.",
+                 hi:"PPA par dastakhat karne aur sahi GSTIN par GST invoice banane ke liye."},
+        verdicts:{
+          verified:{ status:"KYB VERIFIED", unlocked:true,
+            title:{en:"Your business is verified", hi:"Aapka business verify ho gaya"},
+            sub:{en:"Legal has approved it. The PPA is open for Nikhil Desai to sign with Aadhaar eSign, and your invoices will carry GSTIN 08AADCS9012F1ZH.",
+                 hi:"Legal ne approve kar diya. PPA Nikhil Desai ke Aadhaar eSign ke liye khula hai, aur aapke invoice GSTIN 08AADCS9012F1ZH par banenge."} },
+          review:{ status:"MANUAL_REVIEW", unlocked:false,
+            title:{en:"Our legal team is reading this", hi:"Hamari legal team ise padh rahi hai"},
+            sub:{en:"The board resolution always goes to a person — nobody automates who may sign a 25-year contract.",
+                 hi:"Board resolution hamesha kisi vyakti ke paas jaata hai — 25 saal ke contract par kaun dastakhat kar sakta hai, yeh machine tay nahi karti."},
+            gateNote:{en:"opens when Legal approves the authority document", hi:"Legal authority document approve karegi tab khulega"},
+            reasons:[
+              ["AUTHORITY_DOC_REVIEW","Board resolution dated 2026-03-11 is being read by Legal."],
+              ["DOCUMENT_LOW_CONFIDENCE","The principal place of business was read at 0.71 on the certificate."]
+            ] },
+          rejected:{ status:"REJECTED", unlocked:false,
+            title:{en:"This GSTIN is cancelled", hi:"Yeh GSTIN cancel ho chuka hai"},
+            sub:{en:"The GST registry shows this registration as cancelled from 31 Mar 2026. We cannot raise a valid B2B invoice against it, so we cannot sign a PPA either.",
+                 hi:"GST registry ke anusaar yeh registration 31 March 2026 se cancel hai. Iske against valid B2B invoice nahi ban sakti, isliye PPA bhi nahi ho sakta."},
+            gateNote:{en:"a hard fail — reactivate the GSTIN and start again", hi:"hard fail — GSTIN dobara active karwa kar shuru karein"},
+            reasons:[["GST_CANCELLED","Cancelled or Suspended is a hard fail, never a review."]] }
+        }
+      },
+      steps:[
+        { nav:"Gate",         build:sGate,       annot:ANNOT.gate },
+        { nav:"Consent",      build:sConsent,    annot:ANNOT.consent },
+        { nav:"GSTIN",        build:sGstin,      annot:ANNOT.gstin },
+        { nav:"Certificate",  build:sGstCert,    annot:ANNOT.gstCert },
+        { nav:"Company",      build:sCin,        annot:ANNOT.cin },
+        { nav:"Signatory",    build:sSignatory,  annot:ANNOT.signatory },
+        { nav:"Deciding",     build:sWaiting,    annot:ANNOT.decide },
+        { nav:"Result",       build:sResult,     annot:ANNOT.result }
+      ]
+    }
+  };
+
+  /* ============ customer render ============ */
+
+  function flow(){ return FLOWS[state.role]; }
+
+  function renderRail(){
+    var f = flow(), html = "";
+    f.steps.forEach(function(s, i){
+      if (i) html += '<span class="rail-link"></span>';
+      var cls = i === state.step ? "now" : (i < state.step ? "done" : "");
+      html += '<button type="button" class="rail-step ' + cls + '" data-step="' + i + '"' +
+        (i === state.step ? ' aria-current="step"' : "") + '>' +
+        '<span class="dot">' + (i < state.step ? "&#10003;" : (i + 1)) + '</span>' +
+        '<span>' + E(s.nav) + '</span></button>';
+    });
+    document.getElementById("rail").innerHTML = html;
+  }
+
+  function renderStage(){
+    var f = flow(), s = f.steps[state.step];
+    var ctx = Object.assign({}, f.ctx, {
+      subject:f.subject, subjectMeta:f.subjectMeta, gateLabel:f.gateLabel
+    });
+    document.getElementById("urlText").textContent = f.url;
+    document.getElementById("stage").innerHTML = s.build(ctx);
+
+    var nav = '<button type="button" class="btn ghost" id="prevBtn"' + (state.step === 0 ? " disabled" : "") + '>&larr; Back</button>';
+    if (state.step < f.steps.length - 1){
+      nav += '<button type="button" class="btn" id="nextBtn">' + E(t({en:"Continue", hi:"Aage badhein"})) +
+        ' &rarr;</button>';
+    } else {
+      nav += '<button type="button" class="btn" id="restartBtn">' + E(t({en:"Run it again", hi:"Dobara chalayein"})) + '</button>';
+    }
+    document.getElementById("navRow").innerHTML = nav;
+  }
+
+  function renderAnnot(){
+    var a = flow().steps[state.step].annot;
+    var h = '<div class="annot-head"><div class="ah">Behind this screen</div><div class="as">' + E(a.name) + '</div></div>' +
+      '<div class="annot-body">';
+    if (a.api && a.api.length){
+      h += '<div class="blk"><div class="bh">Endpoint</div>' + a.api.map(function(e){
+        var m = e[0].toLowerCase();
+        var cls = m === "get" ? "get" : (m === "hook" ? "hook" : "");
+        return '<div class="ep"><span class="m ' + cls + '">' + E(e[0]) + '</span><span>' + E(e[1]) + '</span></div>';
+      }).join("") + '</div>';
+    }
+    if (a.core){
+      h += '<div class="blk"><div class="bh">Decides / calls</div><span class="fn-call">' + E(a.core) + '</span></div>';
+    }
+    if (a.writes && a.writes.length){
+      h += '<div class="blk"><div class="bh">Writes</div><div class="tbls">' + a.writes.map(function(w){
+        return '<span class="tbl w">' + E(w) + '</span>';
+      }).join("") + '</div></div>';
+    }
+    h += '<div class="blk"><div class="bh">Rules that apply here</div><ul class="rules">' +
+      a.rules.map(function(r){
+        return '<li' + (r[1] === "danger" ? ' class="danger"' : "") + '>' + r[0] + '</li>';
+      }).join("") + '</ul></div></div>';
+    document.getElementById("annot").innerHTML = h;
+  }
+
+  /* ============ admin ============ */
+
+  var CASES = [
+    { id:"KYC-4471", subject:"Ramesh Kumar Sharma", role:"Land Owner", level:"FULL",
+      reason:"Low face match", reasonCode:"FACE_MATCH_LOW", age:"6h", score:0.68, owner:"Compliance" },
+    { id:"KYB-1180", subject:"Shreeji Textiles Pvt Ltd", role:"Commercial", level:"KYB",
+      reason:"Authority document", reasonCode:"AUTHORITY_DOC_REVIEW", age:"1d 2h", score:null, owner:"Legal" },
+    { id:"KYC-4468", subject:"Priya Nair", role:"Investor", level:"FULL",
+      reason:"PAN name mismatch", reasonCode:"PAN_NAME_MISMATCH", age:"1d 7h", score:0.72, owner:"Compliance" },
+    { id:"KYC-4455", subject:"Arjun Mehta", role:"Investor (trial)", level:"PAN_ONLY",
+      reason:"Duplicate PAN", reasonCode:"PAN_ALREADY_USED", age:"2d 4h", score:null, owner:"Compliance" },
+    { id:"KYC-4452", subject:"Lakshmi Devi Yadav", role:"Land Owner", level:"FULL",
+      reason:"Land record name", reasonCode:"LAND_NAME_MISMATCH", age:"3d 1h", score:0.88, owner:"Legal" }
+  ];
+
+  var CASE_DETAIL = {
+    "KYC-4471":{
+      faceScore:0.68, threshold:0.75,
+      rows:[
+        ["Name", "Ramesh Kumar Sharma", "Ramesh Kumar Sharma", "Ramesh Kumar Sharma", "ok"],
+        ["Date of birth", "14-03-1979", "14-03-1979", "14-03-1979", "ok"],
+        ["Father's name", "Mohan Lal Sharma", "Mohanlal Sharma", "&mdash;", "warn"],
+        ["PAN", "ABCPS4412K", "&mdash;", "VALID · name Y · dob Y", "ok"],
+        ["Aadhaar", "&mdash;", "&mdash;", "XXXX XXXX 7731", "ok"],
+        ["Khasra", "114/7", "114/7", "parcel RJ-JPR-00482", "ok"],
+        ["Address", "Ward 7, Bagru, Jaipur 303007", "Ward 7, Bagru, Jaipur (0.71)", "Ward 7, Village Bagru, Jaipur 303007", "warn"]
+      ],
+      timeline:[
+        ["Consent recorded","notice v2.1 · 08 Oct 2026, 09:14"],
+        ["Session opened with HyperVerge","kyc_records → IN_PROGRESS · 09:14"],
+        ["Aadhaar received from DigiLocker","kyc_checks: AADHAAR pass · 09:16"],
+        ["PAN verified via Protean","kyc_checks: PAN pass · 09:17"],
+        ["Liveness passed, face match 0.68","kyc_checks: FACE review · 09:18"],
+        ["Sale deed and jamabandi uploaded","documents ×2 · virus scan clean · 09:22"],
+        ["decideKyc() → MANUAL_REVIEW","3 reasons · audit_log · 09:25"],
+        ["Queued to Compliance","assigned to r.iyer · 09:25"]
+      ]
+    }
+  };
+
+  function renderAdmin(){
+    var sel = state.selCase;
+    var d = CASE_DETAIL[sel] || CASE_DETAIL["KYC-4471"];
+    var selected = CASES.filter(function(c){ return c.id === sel; })[0] || CASES[0];
+    var pct = Math.round(d.faceScore * 100), thr = Math.round(d.threshold * 100);
+
+    var html =
+      '<div class="panel">' +
+        '<div class="panel-head"><h2>Manual review queue</h2>' +
+          '<div class="filters">' +
+            '<span class="fchip on">OPEN · 5</span>' +
+            '<span class="fchip">Low face match · 2</span>' +
+            '<span class="fchip">Name mismatch · 2</span>' +
+            '<span class="fchip">Duplicate PAN · 1</span>' +
+            '<span class="fchip">Older than 2 days · 1</span>' +
+          '</div></div>' +
+        '<div class="tscroll"><table><thead><tr>' +
+          '<th>Case</th><th>Subject</th><th>Role</th><th>Level</th><th>Why it is here</th>' +
+          '<th>Score</th><th>Waiting</th><th>Queue</th>' +
+        '</tr></thead><tbody>' +
+        CASES.map(function(c){
+          return '<tr' + (c.id === sel ? ' class="sel"' : "") + '>' +
+            '<td><button type="button" class="caseid" data-case="' + E(c.id) + '">' + E(c.id) + '</button></td>' +
+            '<td>' + E(c.subject) + '</td>' +
+            '<td>' + E(c.role) + '</td>' +
+            '<td><span class="pill n">' + E(c.level) + '</span></td>' +
+            '<td>' + E(c.reason) + '<br><span class="num" style="font-size:11px;color:var(--ink-3)">' + E(c.reasonCode) + '</span></td>' +
+            '<td class="num">' + (c.score === null ? '<span style="color:var(--ink-3)">&mdash;</span>' : c.score.toFixed(2)) + '</td>' +
+            '<td class="num">' + E(c.age) + '</td>' +
+            '<td><span class="pill ' + (c.owner === "Legal" ? "n" : "r") + '">' + E(c.owner) + '</span></td>' +
+            '</tr>';
+        }).join("") +
+        '</tbody></table></div>' +
+      '</div>' +
+
+      '<div class="panel"><div class="panel-head"><h2>' + E(selected.id) + ' &middot; ' + E(selected.subject) + '</h2>' +
+        '<span class="pill r">MANUAL_REVIEW</span><span class="pill n">' + E(selected.level) + '</span></div>' +
+        '<div class="detail"><div class="detail-main">' +
+
+          '<h3>The two photos, side by side</h3>' +
+          '<div class="faces">' +
+            '<div class="face"><div class="fimg">' + portrait({alt:"Selfie placeholder", bg:"#D6DEDA"}) + '</div>' +
+              '<div class="flab">Selfie, today</div><div class="fmeta">1512×2016 · liveness pass</div></div>' +
+            '<div class="face"><div class="fimg">' + portrait({alt:"Aadhaar photo placeholder", bg:"#CFD3CB", old:true, skin:"#B9825C"}) + '</div>' +
+              '<div class="flab">Aadhaar photo</div><div class="fmeta">320×400 · captured 2013</div></div>' +
+          '</div>' +
+          '<div class="meter"><div class="meter-top"><span>Face match</span><b>' + d.faceScore.toFixed(2) + ' / pass mark ' + d.threshold.toFixed(2) + '</b></div>' +
+            '<div class="track"><span class="fill" style="width:' + pct + '%;background:var(--warn)"></span>' +
+            '<span class="thr" style="left:' + thr + '%"></span></div>' +
+            '<div class="meter-foot"><span>0.00</span><span>pass mark from settings, no release needed</span><span>1.00</span></div></div>' +
+          '<p style="font-size:13px;color:var(--ink-2);max-width:60ch;margin:14px 0 0">The Aadhaar photo is thirteen years old and 320 pixels wide. That, not fraud, is the usual reason a score lands here &mdash; which is why the reviewer sees both images rather than only the number.</p>' +
+
+          '<h3 style="margin-top:26px">Three sources, one row each</h3>' +
+          '<div class="tscroll"><table><thead><tr><th>Field</th><th>What they typed</th><th>What the document says</th><th>What the vendor returned</th></tr></thead><tbody>' +
+          d.rows.map(function(r){
+            var mark = r[4] === "warn" ? '<span class="pill r">differs</span>' : '<span class="pill g">agrees</span>';
+            return '<tr><td><b>' + E(r[0]) + '</b><br>' + mark + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
+          }).join("") +
+          '</tbody></table></div>' +
+
+          '<div class="acts">' +
+            '<button type="button" class="btn ok-b">Approve</button>' +
+            '<button type="button" class="btn bad-b">Reject</button>' +
+            '<button type="button" class="btn ghost">Ask for a new selfie</button>' +
+            '<button type="button" class="btn ghost">Override a failed check</button>' +
+          '</div>' +
+          '<p class="reqnote">Every one of these needs a reason code before it will submit, and writes an audit_log row with the reviewer&rsquo;s name. Override also needs a second approver and a fresh login. §7, §10</p>' +
+
+        '</div><div class="detail-side">' +
+          '<h3>What happened, in order</h3>' +
+          '<ul class="tl">' + d.timeline.map(function(e){
+            return '<li><span><span class="tw"><b>' + E(e[0]) + '</b></span><span class="tm">' + E(e[1]) + '</span></span></li>';
+          }).join("") + '</ul>' +
+          '<h3 style="margin-top:20px">Documents</h3>' +
+          '<div class="filerow" style="max-width:none"><span class="fi">PDF</span><span class="fn"><b>sale-deed-bagru-2011.pdf</b><span>opens in the viewer</span></span></div>' +
+          '<div class="filerow" style="max-width:none"><span class="fi">JPG</span><span class="fn"><b>jamabandi-khasra-114-7.jpg</b><span>opens in the viewer</span></span></div>' +
+          '<p class="reqnote">Links are signed and expire in 60 seconds. Opening one is itself logged, and only roles with the compliance permission can decrypt. §17, §21</p>' +
+        '</div></div>' +
+      '</div>';
+
+    document.getElementById("admView").innerHTML = html;
+  }
+
+  /* ============ wiring ============ */
+
+  function render(){
+    var isCust = state.view === "cust";
+    document.getElementById("custView").hidden = !isCust;
+    document.getElementById("admView").hidden = isCust;
+    document.getElementById("railShell").hidden = !isCust;
+    document.getElementById("roleCtl").hidden = !isCust;
+    document.getElementById("outCtl").hidden = !isCust;
+    document.getElementById("langCtl").hidden = !isCust;
+    document.getElementById("vCust").setAttribute("aria-pressed", String(isCust));
+    document.getElementById("vAdm").setAttribute("aria-pressed", String(!isCust));
+    document.getElementById("lEn").setAttribute("aria-pressed", String(state.lang === "en"));
+    document.getElementById("lHi").setAttribute("aria-pressed", String(state.lang === "hi"));
+    if (isCust){ renderRail(); renderStage(); renderAnnot(); } else { renderAdmin(); }
+  }
+
+  document.getElementById("vCust").addEventListener("click", function(){ state.view = "cust"; render(); });
+  document.getElementById("vAdm").addEventListener("click", function(){ state.view = "adm"; render(); });
+  document.getElementById("lEn").addEventListener("click", function(){ state.lang = "en"; render(); });
+  document.getElementById("lHi").addEventListener("click", function(){ state.lang = "hi"; render(); });
+
+  document.getElementById("roleSel").addEventListener("change", function(e){
+    state.role = e.target.value; state.step = 0; render();
+  });
+  document.getElementById("outSel").addEventListener("change", function(e){
+    state.outcome = e.target.value; render();
+  });
+
+  document.getElementById("rail").addEventListener("click", function(e){
+    var b = e.target.closest("[data-step]");
+    if (!b) return;
+    state.step = Number(b.getAttribute("data-step")); render();
+  });
+
+  document.getElementById("navRow").addEventListener("click", function(e){
+    var id = e.target.id;
+    if (id === "prevBtn" && state.step > 0){ state.step--; render(); }
+    else if (id === "nextBtn"){ state.step++; render(); }
+    else if (id === "restartBtn"){ state.step = 0; render(); }
+  });
+
+  document.getElementById("admView").addEventListener("click", function(e){
+    var b = e.target.closest("[data-case]");
+    if (!b) return;
+    var id = b.getAttribute("data-case");
+    state.selCase = CASE_DETAIL[id] ? id : "KYC-4471";
+    renderAdmin();
+    document.querySelector("#admView .detail").scrollIntoView({behavior:"smooth", block:"start"});
+  });
+
+  render();
+})();
+</script>

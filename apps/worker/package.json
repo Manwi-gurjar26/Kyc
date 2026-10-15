@@ -1,0 +1,32 @@
+{
+  "name": "@kilowattx/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "start:dev": "tsx watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kilowattx/core": "workspace:*",
+    "@kilowattx/db": "workspace:*",
+    "@kilowattx/integrations": "workspace:*",
+    "@kilowattx/kyc-pipeline": "workspace:*",
+    "@kilowattx/validation": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "drizzle-orm": "^0.38.3",
+    "pg": "^8.23.1",
+    "pg-boss": "^12.38.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

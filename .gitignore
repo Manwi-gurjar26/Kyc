@@ -1,0 +1,20 @@
+node_modules/
+.turbo/
+dist/
+.next/
+
+# The development object store. Uploaded KYC documents land here — land
+# records, deeds, selfies. None of it belongs in version control, and
+# LocalDiskBucket refuses to run in production precisely because this is not
+# real storage.
+.kwx-bucket/
+apps/*/.kwx-bucket/
+
+# Secrets are read from the shell, not a file, but a stray one must not be
+# committed by accident.
+.env
+.env.*
+!.env.example
+
+.walk/
+*.log

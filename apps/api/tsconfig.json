@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "types": ["node"],
+    // NestJS decorators.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    // Off, because the esbuild-based runners (tsx, Vitest) do not emit
+    // decorator metadata. Every provider is injected with an explicit
+    // @Inject(TOKEN) instead of by constructor parameter type, so nothing in
+    // this app depends on that metadata existing.
+    "verbatimModuleSyntax": false,
+    "strictPropertyInitialization": false
+  },
+  "include": ["src/**/*.ts"]
+}

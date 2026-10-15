@@ -1,0 +1,1914 @@
+/*
+ * Design tokens.
+ *
+ * The palette comes from the subject's own hardware rather than a generic
+ * fintech blue: copper for the accent, the green of oxidised copper fittings
+ * for structure, and neutrals biased towards that green so nothing reads as
+ * unconsidered grey. Semantic colours for verified / review / rejected are a
+ * separate set, because a KYC outcome is not an accent.
+ */
+
+:root {
+  --paper: #f6f7f8;
+  --surface: #ffffff;
+  --surface-2: #f6f7f8;
+  --surface-3: #eceef1;
+  --line: #e4e7eb;
+  --line-strong: #cbd1d9;
+
+  --ink: #14181f;
+  --ink-2: #5a626f;
+  /* 3.97:1 at #79808d, which is under the floor for 12px hints. */
+  --ink-3: #6b7380;
+
+  /*
+   * The brand green, taken from the design.
+   *
+   * It is a fill colour, not a text colour: #8cc63f carries a near-black label
+   * at 8.2:1 but white at only 2.05:1, so --on-fill is dark here. Where the
+   * green has to BE text — a pill label, a link — it is --brand-ink, which is
+   * the same hue taken down far enough to read on white (4.97:1).
+   */
+  --brand: #8cc63f;
+  --brand-ink: #4f7c16;
+  --brand-soft: #f1f8e6;
+  --accent: #4f7c16;
+  --accent-soft: #f1f8e6;
+
+  --ok: #1c7049;
+  --ok-soft: #dcede3;
+  --warn: #8a6400;
+  --warn-soft: #f5ebd2;
+  --bad: #9e2f2f;
+  --bad-soft: #f4dfdf;
+
+  --on-fill: #14210a;
+  --shadow: 0 1px 2px rgba(16, 32, 30, 0.06), 0 8px 24px -12px rgba(16, 32, 30, 0.18);
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "IBM Plex Sans Devanagari", -apple-system, "Segoe UI",
+    sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c222b;
+    --surface-3: #232a34;
+    --line: #2a313b;
+    --line-strong: #3d4651;
+
+    --ink: #e8ecf1;
+    --ink-2: #a8b1bd;
+    --ink-3: #868f9c;
+
+    --brand: #9ad63f;
+    --brand-ink: #a9dd57;
+    --brand-soft: #1f2d10;
+    --accent: #a9dd57;
+    --accent-soft: #1f2d10;
+
+    --ok: #5fc68f;
+    --ok-soft: #0f2e1e;
+    --warn: #dbb055;
+    --warn-soft: #2f2510;
+    --bad: #e48686;
+    --bad-soft: #331818;
+
+    --on-fill: #11180a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/*
+ * Forcing dark, for the toggle in the header.
+ *
+ * The block above answers "the operating system says dark"; this one answers
+ * "this person asked for dark". Both are needed: the media query is what makes
+ * the right theme appear on first paint and with JavaScript disabled, and the
+ * attribute is the only thing that can override it in either direction.
+ *
+ * The values are duplicated, which is a real hazard — two palettes that drift
+ * apart would give a toggled-dark page subtly different colours from an
+ * OS-dark one, and nobody would notice because nobody tests both. So it is a
+ * checked invariant rather than a convention: scripts/check-theme-parity.mjs
+ * asserts the two blocks are byte-identical and runs as part of `typecheck`.
+ * Edit one, and the build tells you to edit the other.
+ */
+:root[data-theme="dark"] {
+  --paper: #0d1117;
+  --surface: #161b22;
+  --surface-2: #1c222b;
+  --surface-3: #232a34;
+  --line: #2a313b;
+  --line-strong: #3d4651;
+
+  --ink: #e8ecf1;
+  --ink-2: #a8b1bd;
+  --ink-3: #868f9c;
+
+  --brand: #9ad63f;
+  --brand-ink: #a9dd57;
+  --brand-soft: #1f2d10;
+  --accent: #a9dd57;
+  --accent-soft: #1f2d10;
+
+  --ok: #5fc68f;
+  --ok-soft: #0f2e1e;
+  --warn: #dbb055;
+  --warn-soft: #2f2510;
+  --bad: #e48686;
+  --bad-soft: #331818;
+
+  --on-fill: #11180a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+/*
+ * And the native widgets follow.
+ *
+ * `color-scheme` is what tells the browser to render the scrollbars, the
+ * select popup and the file picker dark. Without it those stay light against a
+ * dark page, which is the giveaway that a dark theme was painted on rather
+ * than declared.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- layout ---------- */
+
+.shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 0 56px;
+}
+
+/*
+ * Skip link.
+ *
+ * Off-screen until focused rather than display:none, which would take it out
+ * of the tab order and make it useless to the only people who need it.
+ */
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 10;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 0 0 6px 6px;
+  border-top: 0;
+  padding: 9px 14px;
+  font-size: 13px;
+  text-decoration: none;
+  transition: top 120ms ease;
+}
+
+.skip:focus-visible {
+  top: 0;
+}
+
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.topbar-in {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-inline: 16px;
+}
+
+/* ---------- header: identity row ---------- */
+
+.topbar-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-block: 12px 10px;
+}
+
+.brand {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.025em;
+}
+
+.chip-env {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand);
+  padding: 3px 7px;
+  border-radius: 2px;
+  /** Pushes the identity to the far edge, and wraps before the brand does. */
+  margin-right: auto;
+}
+
+.whoami {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 3px 7px;
+  background: var(--surface-2);
+}
+
+/** Absence stated, not left blank: "no identity" is a different thing. */
+.whoami-none {
+  color: var(--ink-3);
+  border-style: dashed;
+  background: none;
+}
+
+/* ---------- theme toggle ---------- */
+
+/*
+ * A segmented control, not a switch.
+ *
+ * Three states, because "follow this device" is a real preference and the
+ * commonest one — a two-state switch discards it the first time it is touched.
+ * Segments make all three visible at once, so the current setting is readable
+ * without pressing anything.
+ */
+.themetoggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.themebtn {
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.themebtn + .themebtn {
+  border-left: 1px solid var(--line);
+}
+
+.themebtn:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+/*
+ * The chosen segment.
+ *
+ * Selected on [aria-pressed], the same attribute a screen reader announces,
+ * rather than a class alongside it. One source for the state means the visual
+ * and the announced cannot disagree — and if the attribute is ever forgotten,
+ * the button stops looking selected, which is a visible bug rather than a
+ * silent accessibility one.
+ */
+.themebtn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--brand);
+}
+
+/** Focus has to clear the clipped corners of the group. */
+.themebtn:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ---------- header: navigation ---------- */
+
+/*
+ * The nav scrolls sideways instead of wrapping.
+ *
+ * Six links in a wrapping row became a ragged three-deep block on a phone and
+ * pushed the page into a horizontal scroll, which moves the content out from
+ * under the reader's thumb. One scrolling strip keeps the page itself fixed.
+ *
+ * The negative inline margin lets it scroll edge to edge while the padding
+ * keeps the first and last item clear of the gutter.
+ */
+.navbar {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
+  margin-inline: -16px;
+  padding-inline: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /** Sits the active underline on the header's own bottom border. */
+  margin-bottom: -1px;
+}
+
+.navbar::-webkit-scrollbar {
+  display: none;
+}
+
+.navgroup {
+  display: flex;
+  gap: 18px;
+}
+
+.navgroup-staff {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+  margin-left: auto;
+}
+
+.navgroup-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.navlink {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  text-decoration: none;
+  white-space: nowrap;
+  /** 40px tall including the border: a thumb-sized target, not a text link. */
+  padding-block: 11px;
+  border-bottom: 2px solid transparent;
+}
+
+.navlink:hover {
+  color: var(--ink);
+  border-bottom-color: var(--line-strong);
+}
+
+/*
+ * The page you are on, said twice over.
+ *
+ * Colour and weight alone would carry it for most people and for nobody with
+ * a colour deficiency, so the underline does the real work; `aria-current`
+ * says it a third time for anyone not looking at it.
+ */
+.navlink.current {
+  color: var(--ink);
+  font-weight: 500;
+  border-bottom-color: var(--brand);
+}
+
+@media (max-width: 560px) {
+  .navgroup,
+  .navbar {
+    gap: 14px;
+  }
+
+  /*
+   * On a phone the groups sit in one scrolling strip. `margin-left: auto`
+   * would push the staff group off the end of the scroll region, where there
+   * is nothing to suggest it is there.
+   */
+  .navgroup-staff {
+    margin-left: 0;
+    padding-left: 14px;
+  }
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 28px 26px 30px;
+  margin-top: 24px;
+}
+
+@media (max-width: 560px) {
+  .card {
+    padding: 22px 16px 24px;
+  }
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin: 0 0 10px;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(23px, 3.6vw, 30px);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+
+h2 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  margin: 26px 0 10px;
+}
+
+.lead {
+  margin: 0 0 22px;
+  color: var(--ink-2);
+  max-width: 58ch;
+}
+
+/* ---------- step rail ---------- */
+
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding-block: 4px;
+}
+
+.rail-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.rail-step .dot {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  flex: none;
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.rail-step.done .dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-fill);
+}
+
+.rail-step.now {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rail-step.now .dot {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--on-fill);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.rail-link {
+  width: 22px;
+  height: 1.5px;
+  background: var(--line-strong);
+  flex: none;
+  margin: 0 5px;
+}
+
+/* ---------- notice ---------- */
+
+.notice {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--surface-2);
+  border-radius: 0 6px 6px 0;
+  padding: 15px 17px;
+  margin: 0 0 20px;
+}
+
+.notice-head {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 9px;
+}
+
+.notice ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.notice li {
+  margin: 6px 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.notice li strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- forms ---------- */
+
+.field {
+  margin: 0 0 16px;
+  max-width: 420px;
+}
+
+label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="file"],
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+select,
+textarea {
+  font-family: var(--body);
+  letter-spacing: 0;
+}
+
+textarea {
+  resize: vertical;
+}
+
+/*
+ * The focused field, marked on the control itself.
+ *
+ * The global :focus-visible outline tells you where the keyboard is; this
+ * tells you which box is taking what you type, which is a different question
+ * and the one that matters on a form of PAN and account numbers.
+ */
+input[type="text"]:focus,
+input[type="tel"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+/*
+ * The file input.
+ *
+ * Left to the browser it is a grey button with a filename beside it, in the
+ * platform font, next to fields that look nothing like it. Only the button
+ * part can be reached, so that is what gets styled.
+ */
+input[type="file"] {
+  padding: 8px;
+  font-family: var(--body);
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  font: inherit;
+  font-weight: 500;
+  margin-right: 12px;
+  padding: 7px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--surface-3);
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+/* ---------- buttons ---------- */
+
+/*
+ * One rule for buttons and for the anchors that look like them.
+ *
+ * Eleven places render `<a className="btn">` — "Go back", "See the full
+ * status", the primary action on six pages. None of them reset the anchor's
+ * underline, so every one of those rendered as underlined white text at a
+ * different height from the real buttons beside it. `.btn.small` had already
+ * patched `text-decoration` and `display` for itself, which is the tell: the
+ * fix belonged here all along.
+ *
+ * inline-flex rather than inline-block so the label centres in both, and a
+ * fixed line-height so a <button> and an <a> with the same padding come out
+ * exactly the same height.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: var(--on-fill);
+  border-radius: 6px;
+  padding: 11px 20px;
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.2;
+  min-height: 42px;
+  text-decoration: none;
+  text-align: center;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 60ms ease;
+}
+
+.btn:hover {
+  filter: brightness(1.07);
+}
+
+/** Something has to happen on press, or a slow action feels like a dead click. */
+.btn:active {
+  transform: translateY(1px);
+}
+
+/*
+ * Disabled by palette, not by opacity.
+ *
+ * `opacity: 0.45` on copper took the label under the contrast floor while
+ * leaving it looking like live text. A flat muted surface reads as "not now"
+ * and stays legible, which matters because the commonest disabled button here
+ * is a submit mid-request.
+ */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--line-strong);
+  font-weight: 500;
+}
+
+/** brightness() on a transparent background does nothing; this does. */
+.btn.ghost:hover {
+  background: var(--surface-2);
+  border-color: var(--ink-3);
+  color: var(--ink);
+  filter: none;
+}
+
+.btn.block {
+  /** flex, not block: the label still has to centre. */
+  display: flex;
+  width: 100%;
+  max-width: 420px;
+}
+
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+/* ---------- key/value ---------- */
+
+.kv {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0;
+}
+
+.kv-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(0, 1.6fr);
+  border-top: 1px solid var(--line);
+}
+
+.kv-row:first-child {
+  border-top: 0;
+}
+
+.kv-row dt {
+  padding: 10px 13px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.kv-row dd {
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 14px;
+}
+
+.kv-row dd small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- pills ---------- */
+
+.pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 2px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.pill.g {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.pill.r {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.pill.b {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.pill.n {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-color: var(--line-strong);
+}
+
+/* ---------- verdict ---------- */
+
+.verdict {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border-radius: 8px;
+  padding: 19px 21px;
+  margin: 0 0 22px;
+  border: 1px solid;
+}
+
+.verdict .mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--on-fill);
+}
+
+.verdict .title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.verdict .sub {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-top: 4px;
+  max-width: 52ch;
+}
+
+.verdict.ok {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+.verdict.ok .mark {
+  background: var(--ok);
+}
+.verdict.warn {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+.verdict.warn .mark {
+  background: var(--warn);
+}
+.verdict.bad {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+}
+.verdict.bad .mark {
+  background: var(--bad);
+}
+.verdict.wait {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+}
+.verdict.wait .mark {
+  background: var(--ink-3);
+}
+
+/* ---------- reasons ---------- */
+
+.reasons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.reasons li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 13px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.reasons code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--warn);
+  flex: none;
+}
+
+/* ---------- choices ---------- */
+
+.choices {
+  display: grid;
+  gap: 11px;
+  margin: 0 0 20px;
+}
+
+.choice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  border-radius: 7px;
+  padding: 14px 16px;
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.choice .radio {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  margin-top: 3px;
+  flex: none;
+  background: var(--surface);
+}
+
+.choice[aria-pressed="true"] .radio {
+  border-color: var(--brand);
+  border-width: 4.5px;
+}
+
+.choice .ct {
+  font-weight: 600;
+  font-size: 14.5px;
+  display: block;
+}
+
+.choice .cd {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  display: block;
+}
+
+/* ---------- camera ---------- */
+
+.cam {
+  max-width: 300px;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  position: relative;
+}
+
+.cam video,
+.cam canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);
+}
+
+.cam .oval {
+  position: absolute;
+  inset: 11% 15%;
+  border: 2px dashed var(--brand);
+  border-radius: 50% / 40%;
+  pointer-events: none;
+}
+
+.cam .camhint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 9px 12px;
+  background: linear-gradient(transparent, rgba(11, 20, 19, 0.82));
+  color: #f0f4f2;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---------- misc ---------- */
+
+.tickline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  margin: 8px 0;
+  color: var(--ink-2);
+}
+
+.tickline i {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.tickline.pend i {
+  background: var(--surface-3);
+  color: var(--ink-3);
+}
+
+/*
+ * Errors. Shaped like `.notice`, coloured like a problem.
+ *
+ * The left accent is the same device `.notice` uses, so the two read as one
+ * family seen twice rather than two unrelated boxes — which is what you want
+ * when a form shows both at once.
+ */
+.alert {
+  border: 1px solid var(--bad);
+  border-left-width: 3px;
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0 0 18px;
+}
+
+.alert ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.footnote {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.6;
+  border-left: 2px solid var(--brand);
+  padding-left: 10px;
+  margin-top: 22px;
+}
+
+.spin {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
+  animation: spin 0.9s linear infinite;
+  margin: 4px 0 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hi {
+  font-family: "IBM Plex Sans Devanagari", var(--body);
+}
+
+.userlist {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.userrow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 13px;
+  background: var(--surface-2);
+  width: 100%;
+  text-align: left;
+}
+
+.userrow .name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.userrow .phone {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.userrow .go {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+/* ---------- admin: wider shell, tables, faces, timeline ---------- */
+
+.shell.wide {
+  max-width: 980px;
+}
+
+/*
+ * The queue scrolls sideways on a narrow screen, so the scrollbar is left
+ * visible and given some contrast. Hiding it the way the nav strip does would
+ * be wrong here: the nav has six items you can guess at, where a table cut off
+ * mid-column gives no hint that three more columns exist.
+ */
+.tablewrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  font-size: 13.5px;
+}
+
+thead th {
+  text-align: left;
+  padding: 9px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-strong);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+/*
+ * Row highlighting, which is the whole readability of a six-column queue.
+ *
+ * Reading "Why it is here" and then tracking back along the row to the Review
+ * button was unaided before this — no hover, no banding, one hairline rule
+ * between rows. On the case that gets picked up because it has been waiting
+ * nineteen hours, the row you are on is the thing you most need to be sure of.
+ *
+ * :focus-within as well as :hover, so tabbing to the Review link lights the
+ * same row the mouse would.
+ */
+tbody tr:hover,
+tbody tr:focus-within {
+  background: var(--surface-2);
+}
+
+/** The card already draws a line there; two together read as a seam. */
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.submono {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+/** Inherits the rest, including the underline reset, from .btn. */
+.btn.small {
+  padding: 6px 12px;
+  font-size: 13px;
+  min-height: 0;
+}
+
+.rolepicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.rolepicker .field {
+  margin-bottom: 0;
+  min-width: 280px;
+}
+
+/* the two photographs */
+
+.faces {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+}
+
+.face {
+  width: 148px;
+  margin: 0;
+}
+
+.portrait {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-3);
+}
+
+/*
+ * The Aadhaar photograph is rendered small and soft on purpose: pixelating it
+ * is what makes the reviewer see the actual problem rather than just read a
+ * low number.
+ */
+.portrait.aged {
+  image-rendering: pixelated;
+  filter: contrast(0.92) saturate(0.75);
+}
+
+.face figcaption {
+  display: block;
+  margin-top: 7px;
+}
+
+.facelabel {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.facemeta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* score meter */
+
+.meter {
+  margin: 18px 0 4px;
+  max-width: 420px;
+}
+
+.meter-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+
+.track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  position: relative;
+  overflow: visible;
+}
+
+.track .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+}
+
+.track .thr {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--ink);
+}
+
+.meter-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 6px;
+}
+
+/* timeline */
+
+.tl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tl li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 16px;
+  position: relative;
+}
+
+.tl li::before {
+  content: "";
+  grid-column: 1;
+  margin-top: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.tl li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 17px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.tl .tw {
+  display: block;
+  font-size: 13.5px;
+}
+
+.tl .tnote {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-top: 3px;
+}
+
+.tl .tm {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: 3px;
+}
+
+/*
+ * Admin pages are wider. Selecting on the wrapper the admin layout renders
+ * keeps the route structure alone — the alternative is a route group whose
+ * only purpose is a max-width.
+ */
+.shell:has(.adminroot) {
+  max-width: 980px;
+}
+
+/*
+ * And so is the header above them, or the brand stops lining up with the
+ * content beneath it.
+ *
+ * Scoped from `body`, because the previous selector could not match: it looked
+ * for `.adminroot` among the siblings of `.topbar-in`, which has none — the
+ * wrapper is inside `main`, two levels away. So the shell widened and the
+ * header did not, on every admin page. `body:has()` can see both.
+ */
+body:has(.adminroot) .topbar-in {
+  max-width: 980px;
+}
+
+/* ================================================================== */
+/* The verification flow                                              */
+/* ================================================================== */
+/*
+ * Built to the supplied design: a phone-width column, a four-segment
+ * progress rail, one card per step, one green action at the bottom.
+ *
+ * Phone-first rather than phone-adapted. This is the screen somebody fills in
+ * standing in their own yard with the land papers in the other hand, so the
+ * column is sized for a phone and simply centres on a laptop, instead of a
+ * desktop layout squeezed down.
+ */
+
+.flow {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 14px 16px 40px;
+}
+
+/* ---------- progress ---------- */
+
+.flowtop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.backlink {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.backlink:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.steps {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.steps i {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.steps i.on {
+  background: var(--brand);
+}
+
+.stepnote {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+
+.flow h1 {
+  font-size: 25px;
+  margin: 0 0 7px;
+}
+
+.flowlead {
+  color: var(--ink-2);
+  font-size: 13.5px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* ---------- a choosable entity ---------- */
+
+.choicecard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 15px 16px;
+  margin-bottom: 12px;
+  position: relative;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.choicecard:hover {
+  border-color: var(--line-strong);
+}
+
+/*
+ * Selected state on [aria-pressed], the attribute a screen reader announces,
+ * so the look and the announcement cannot disagree.
+ */
+.choicecard[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.choicecard .tick {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: transparent;
+}
+
+.choicecard[aria-pressed="true"] .tick {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-fill);
+}
+
+.choicecard .kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border-radius: 20px;
+  padding: 3px 9px;
+  margin-bottom: 9px;
+}
+
+.choicecard[aria-pressed="true"] .kind {
+  background: var(--surface);
+}
+
+.choicecard .what {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  margin: 0 0 4px;
+  padding-right: 28px;
+}
+
+.choicecard .who {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin: 0 0 11px;
+  line-height: 1.45;
+}
+
+.choicecard .needs {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ---------- a field with an inline action ---------- */
+
+.frow {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 13px 14px;
+  margin-bottom: 11px;
+}
+
+.frow-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.frow-top label {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tag {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border-radius: 20px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.frow-in {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.frow-in input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+/** The inline "Get OTP" / "Fetch" action. Height-matched to the input. */
+.inlinebtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--brand);
+  color: var(--on-fill);
+  border: 1px solid var(--brand);
+  border-radius: 9px;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: filter 120ms ease;
+}
+
+.inlinebtn:hover {
+  filter: brightness(1.05);
+}
+
+.inlinebtn:disabled {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: not-allowed;
+  filter: none;
+}
+
+.frow .hint {
+  margin-top: 8px;
+  font-family: var(--body);
+  font-size: 11.5px;
+}
+
+/** What a lookup came back with, confirmed inline. */
+.okchip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.okchip .src {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+}
+
+/* ---------- upload ---------- */
+
+.upload {
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 11px;
+  padding: 18px 14px;
+  text-align: center;
+  background: var(--surface-2);
+  cursor: pointer;
+  display: block;
+  transition: border-color 120ms ease;
+}
+
+.upload:hover {
+  border-color: var(--brand);
+}
+
+.upload .ut {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.upload .us {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 3px;
+}
+
+.upload input[type="file"] {
+  display: none;
+}
+
+/* ---------- liveness ---------- */
+
+.selfie {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 12px;
+  background: var(--surface-2);
+}
+
+.selfie .st {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.selfie .ss {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.selfie .cam {
+  margin-left: auto;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--brand);
+  color: var(--on-fill);
+  border: 0;
+  font-size: 16px;
+  position: static;
+}
+
+/* ---------- the action at the bottom ---------- */
+
+.cta {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: var(--brand);
+  color: var(--on-fill);
+  border: 1px solid var(--brand);
+  border-radius: 11px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 18px;
+  transition:
+    filter 120ms ease,
+    transform 60ms ease;
+}
+
+.cta:hover {
+  filter: brightness(1.05);
+}
+
+.cta:active {
+  transform: translateY(1px);
+}
+
+.cta:disabled {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.secure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 14px;
+}
+
+/* ---------- the finished state ---------- */
+
+.bigtick {
+  width: 72px;
+  height: 72px;
+  margin: 8px auto 18px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--on-fill);
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  box-shadow: 0 0 0 10px var(--brand-soft);
+}
+
+.donerow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 12px;
+  margin-bottom: 9px;
+  background: var(--surface);
+}
+
+.donerow .dt {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.donerow .dd {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.donerow .dstate {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border-radius: 20px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
