@@ -18,3 +18,9 @@ apps/*/.kwx-bucket/
 
 .walk/
 *.log
+
+# TypeScript's incremental build cache. It records absolute paths and file
+# timestamps from whichever machine ran `tsc`, so a committed one is dirty
+# again the moment anybody typechecks — and it conflicts on every merge while
+# telling a reviewer nothing.
+*.tsbuildinfo
