@@ -29,8 +29,10 @@ const OWNER_URL =
 /** The fake gateway accepts this and nothing else. */
 const RIGHT_OTP = "123456";
 const WRONG_OTP = "000000";
-/** Verhoeff-valid, and does not end in 0 or 1 (the fake's failure markers). */
+/** Verhoeff-valid, and does not end in 0, 1 or 9 (the fake's failure markers). */
 const AADHAAR = "999941057058";
+/** Verhoeff-valid, ending in 9: the fake's gateway-outage marker on verify. */
+const AADHAAR_GATEWAY_DOWN = "975810150919";
 
 let app: NestExpressApplication;
 let owner: DatabaseHandle;
@@ -216,6 +218,107 @@ describe("guessing the OTP", () => {
       .send({ otp: RIGHT_OTP })
       .expect(400);
     expect(after.body.code).toBe("NO_OTP_REQUESTED");
+  });
+
+  /**
+   * A gateway that never looked at the OTP has not used up a try.
+   *
+   * This is the bug the live gateway found: it answered 503 "Source
+   * Unavailable" — UIDAI unreachable on their side — and because the attempt
+   * is counted before the call, each outage spent one of three. Three of them
+   * and somebody was locked out of a challenge whose OTP had never once been
+   * checked, told to request a new one, and met by the same outage again.
+   *
+   * Four outages here, which is more than the limit. If they counted, the
+   * fourth would be TOO_MANY_ATTEMPTS and the right OTP afterwards would be
+   * refused — so the correct OTP still working at the end is the whole
+   * assertion.
+   */
+  test("a gateway outage does not spend an attempt", async () => {
+    const userId = await consented();
+    await http()
+      .post("/v1/kyc/aadhaar/otp")
+      .set(as(userId))
+      .send({ aadhaarNumber: AADHAAR_GATEWAY_DOWN })
+      .expect(201);
+
+    for (let i = 0; i < 4; i++) {
+      const response = await http()
+        .post("/v1/kyc/aadhaar/verify")
+        .set(as(userId))
+        .send({ otp: RIGHT_OTP })
+        .expect(400);
+
+      /** Not AADHAAR_CHECK_FAILED: nothing was checked, so nothing failed. */
+      expect(response.body.code).toBe("AADHAAR_UNAVAILABLE");
+    }
+
+    /**
+     * The number ends in 9, so the fake keeps failing on verify. Asking for a
+     * fresh OTP against a working number proves the challenge was never
+     * exhausted — the attempts are back where they started.
+     */
+    await http()
+      .post("/v1/kyc/aadhaar/otp")
+      .set(as(userId))
+      .send({ aadhaarNumber: AADHAAR })
+      .expect(201);
+    await http()
+      .post("/v1/kyc/aadhaar/verify")
+      .set(as(userId))
+      .send({ otp: RIGHT_OTP })
+      .expect(201);
+  });
+
+  /**
+   * The counter must not be driven below zero by a run of outages.
+   *
+   * A negative count would read as "attempts remaining" forever and hand out
+   * unlimited guesses at a six-digit secret, which is worse than the bug
+   * being fixed. Outages first, then three wrong OTPs must still exhaust it.
+   */
+  test("outages cannot buy extra guesses", async () => {
+    const userId = await consented();
+    await http()
+      .post("/v1/kyc/aadhaar/otp")
+      .set(as(userId))
+      .send({ aadhaarNumber: AADHAAR_GATEWAY_DOWN })
+      .expect(201);
+
+    for (let i = 0; i < 3; i++) {
+      await http()
+        .post("/v1/kyc/aadhaar/verify")
+        .set(as(userId))
+        .send({ otp: WRONG_OTP })
+        .expect(400);
+    }
+
+    /**
+     * A number ending in 9 fails before the OTP is ever compared, so those
+     * three were outages and the count is still zero. Now a working challenge
+     * and three genuinely wrong guesses, which must exhaust it on schedule.
+     */
+    await http()
+      .post("/v1/kyc/aadhaar/otp")
+      .set(as(userId))
+      .send({ aadhaarNumber: AADHAAR })
+      .expect(201);
+
+    for (let i = 0; i < 3; i++) {
+      const response = await http()
+        .post("/v1/kyc/aadhaar/verify")
+        .set(as(userId))
+        .send({ otp: WRONG_OTP })
+        .expect(400);
+      expect(response.body.code).toBe("AADHAAR_CHECK_FAILED");
+    }
+
+    const blocked = await http()
+      .post("/v1/kyc/aadhaar/verify")
+      .set(as(userId))
+      .send({ otp: WRONG_OTP })
+      .expect(400);
+    expect(blocked.body.code).toBe("TOO_MANY_ATTEMPTS");
   });
 
   /** Asking again is the way out, and it resets the count. */

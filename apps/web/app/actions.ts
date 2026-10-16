@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -9,7 +8,6 @@ import {
   clearCurrentUser,
   currentUserId,
   setCurrentUserId,
-  type SessionResponse,
 } from "../lib/api";
 
 /**
@@ -104,61 +102,33 @@ async function ensureSession(): Promise<string> {
  * Validated here rather than trusted, because it arrives from a hidden input
  * and chooses which checks somebody is about to be put through.
  */
-export async function chooseKycType(formData: FormData): Promise<void> {
+export async function chooseKycType(
+  _previous: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
   const entity = String(formData.get("entity") ?? "");
+
+  /**
+   * Reported rather than redirected away from. Bouncing back to this same
+   * screen told the person nothing about why their click did nothing.
+   */
   if (entity !== "INDIVIDUAL" && entity !== "BUSINESS") {
-    redirect("/");
+    return {
+      error: {
+        code: "ENTITY_REQUIRED",
+        message: "Please choose whether you are an individual or a business.",
+      },
+    };
   }
 
-  await ensureSession();
-  redirect(entity === "INDIVIDUAL" ? "/verify/individual" : "/verify/business");
-}
-
-/* ------------------------------------------------------------------ */
-/* The KYC flow                                                       */
-/* ------------------------------------------------------------------ */
-
-/**
- * Records consent, opens a vendor session, and sends the user into the
- * vendor's hosted flow.
- *
- * Consent first, always. Nothing reaches a vendor — and nothing costs us a
- * vendor call — before there is a row saying what the person agreed to and
- * which version of the notice they were shown.
- */
-export async function beginVerification(formData: FormData): Promise<ActionResult> {
-  const locale = String(formData.get("locale") ?? "en") === "hi" ? "hi" : "en";
-  const role = String(formData.get("role") ?? "LAND_OWNER");
-  const testScenario = String(formData.get("testScenario") ?? "pass");
-
-  let session: SessionResponse;
-
+  /**
+   * The session call is the one thing here that can fail, and it used to take
+   * the page down with it: an unreachable API threw out of this action and
+   * Next.js rendered its error overlay over the form. Returned as a result
+   * instead, so the screen stays up and says what happened.
+   */
   try {
-    const consent = await api<{ id: string }>("/v1/kyc/consents", {
-      method: "POST",
-      body: {
-        purpose: "KYC_VERIFICATION",
-        noticeVersion: "2.1",
-        locale,
-      },
-    });
-
-    session = await api<SessionResponse>("/v1/kyc/sessions", {
-      method: "POST",
-      /**
-       * A fresh key per genuine attempt. Re-submitting the same form must not
-       * open — and bill us for — a second vendor session, which is what the
-       * key prevents server-side; generating it here means one key per click.
-       */
-      idempotencyKey: `web-${randomUUID()}`,
-      body: {
-        level: "FULL",
-        role,
-        consentId: consent.id,
-        locale,
-        testScenario,
-      },
-    });
+    await ensureSession();
   } catch (error) {
     if (error instanceof ApiCallError) {
       return { error: { code: error.body.code, message: error.body.message } };
@@ -167,39 +137,38 @@ export async function beginVerification(formData: FormData): Promise<ActionResul
   }
 
   /**
-   * In production this would be the vendor's own URL on their origin. Here it
-   * is a local page standing in for it, so the shape of the flow — leave our
-   * site, come back — is the same shape that will ship.
+   * Outside the try on purpose. `redirect()` works by throwing, so catching
+   * around it would swallow the navigation and report it as a failure.
    */
-  redirect(`/vendor/${session.vendorSessionId}?locale=${locale}`);
+  redirect(entity === "INDIVIDUAL" ? "/verify/individual" : "/verify/business");
 }
 
-/**
- * Completes the vendor's side.
+/* ------------------------------------------------------------------ */
+/* The KYC flow                                                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The hosted-vendor path is gone, and `beginVerification` and
+ * `completeVendorFlow` with it.
  *
- * Calls the API's dev endpoint, which asks the fake provider for a genuinely
- * signed webhook and feeds it through the real handler: signature check,
- * replay guard, server-to-server fetch, decideKyc(), one transaction. The
- * browser is not trusted to report an outcome, because in production the
- * browser will not be the thing reporting it.
+ * It opened a vendor session and sent the person off to the vendor's own site
+ * to finish — leave our page, come back, webhook reports the outcome. That is
+ * a real shape and some gateways offer it, but the one this system runs on
+ * does not: Sandbox's Aadhaar OKYC is two server-to-server calls, OTP out and
+ * OTP back, which is why `SandboxKycProvider.createSession()` throws rather
+ * than returning an empty session.
+ *
+ * So the button led to a 500 the moment the fake adapter was switched off. One
+ * path in, now, through /verify/individual and /verify/business — the OTP is
+ * asked for on our own page, which is also the better flow: nobody is sent to
+ * a domain they do not recognise in the middle of handing over an Aadhaar
+ * number.
+ *
+ * The API side is deliberately left standing. POST /v1/kyc/sessions, the
+ * webhook handler, the replay guard and the outbox are vendor-agnostic, and a
+ * gateway with a hosted flow is exactly what the failover slot is for. What is
+ * removed here is the route users could walk into, not the capability.
  */
-export async function completeVendorFlow(formData: FormData): Promise<ActionResult> {
-  const sessionId = String(formData.get("sessionId") ?? "");
-
-  try {
-    await api(`/v1/dev/kyc-sessions/${sessionId}/complete`, {
-      method: "POST",
-      authenticated: false,
-    });
-  } catch (error) {
-    if (error instanceof ApiCallError) {
-      return { error: { code: error.body.code, message: error.body.message } };
-    }
-    throw error;
-  }
-
-  redirect("/status");
-}
 
 export async function restart(): Promise<void> {
   redirect("/");

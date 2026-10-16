@@ -403,6 +403,61 @@ describe("decideKyc — missing checks never become a pass", () => {
     expect(codes(decision.reasons)).toContain("SELFIE_MISSING");
   });
 
+  /**
+   * A selfie we hold but cannot score is a third state, and it needs its own
+   * reason.
+   *
+   * The gateway this system runs on sells no liveness or face-match check, so
+   * a selfie can be collected, virus-scanned and stored while nobody has
+   * compared it to anything. Reporting SELFIE_MISSING for that is false — the
+   * reviewer goes looking for a file that is sitting right there — and
+   * inventing a livenessPassed to fill the gap would auto-approve a biometric
+   * nobody checked.
+   *
+   * So it reviews, like a missing selfie, and says something different.
+   */
+  test("a selfie that was collected but not scored reviews, and says so", () => {
+    const input = fullKyc();
+    delete (input as { selfie?: unknown }).selfie;
+    const decision = decideKyc(
+      { ...input, selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).toBe("MANUAL_REVIEW");
+    expect(codes(decision.reasons)).toContain("SELFIE_NOT_SCORED");
+    expect(codes(decision.reasons)).not.toContain("SELFIE_MISSING");
+  });
+
+  /**
+   * And it must not become a pass.
+   *
+   * This is the assertion that stops the new state being a loophole: an
+   * unscored selfie is not evidence of a face match, so it can never be the
+   * thing that lets somebody through.
+   */
+  test("an unscored selfie never reaches VERIFIED", () => {
+    const input = fullKyc();
+    delete (input as { selfie?: unknown }).selfie;
+    const decision = decideKyc(
+      { ...input, selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).not.toBe("VERIFIED");
+  });
+
+  /** A real scored selfie still wins: the flag is only for the absence of one. */
+  test("a scored selfie is unaffected by the not-scored flag", () => {
+    const decision = decideKyc(
+      { ...fullKyc(), selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).toBe("VERIFIED");
+    expect(codes(decision.reasons)).not.toContain("SELFIE_NOT_SCORED");
+  });
+
   test("a FULL decision without a PAN result goes to review", () => {
     const input = fullKyc();
     delete (input as { pan?: unknown }).pan;

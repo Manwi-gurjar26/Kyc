@@ -250,6 +250,24 @@ export class FakeKycProvider implements KycProvider {
       throw new VendorRequestError("fake", "That OTP has expired. Please request a new one.");
     }
 
+    /**
+     * A number ending in 9 makes the gateway fall over on verification.
+     *
+     * The other markers all produce a gateway that answered — an expired
+     * challenge, a wrong OTP — and there was no way to produce one that did
+     * not answer at all. So the branch where the OTP is never adjudicated
+     * went untested, and it was wrong: it spent one of the three attempts on
+     * a gateway outage. The real gateway did exactly this, returning 503
+     * "Source Unavailable", three times over.
+     *
+     * The challenge is deliberately left in place. Nothing was checked, so
+     * nothing has been used up, and the same OTP must still work afterwards —
+     * which is the half of the behaviour worth asserting.
+     */
+    if (challenge.aadhaarNumber.endsWith("9")) {
+      throw new VendorTimeoutError(this.name, 8000);
+    }
+
     if (challenge.aadhaarNumber.endsWith("0") || otp !== "123456") {
       /**
        * The challenge is deliberately NOT deleted on a wrong OTP: UIDAI allows

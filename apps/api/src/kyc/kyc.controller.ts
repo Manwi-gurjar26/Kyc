@@ -4,8 +4,10 @@ import {
   AadhaarOtpVerifySchema,
   ConsentInputSchema,
   CreateKycSessionInputSchema,
+  PanCheckInputSchema,
   type ConsentInput,
   type CreateKycSessionInput,
+  type PanCheckInput,
 } from "@kilowattx/validation";
 import {
   Body,
@@ -148,6 +150,30 @@ export class KycController {
     const session = sessionOf(request);
     const input = AadhaarOtpVerifySchema.parse(body);
     return this.kyc.confirmAadhaarOtp(session.userId, input.otp);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* PAN                                                              */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Verifies a PAN against the Income Tax Department.
+   *
+   * The body carries the PAN and nothing else — deliberately no name and no
+   * date of birth. Those are matched against what UIDAI returned at the
+   * Aadhaar step, and accepting them here would let the subject choose the
+   * input to their own name check.
+   *
+   * The ten characters are normalised and checked offline first, so a
+   * mistyped PAN costs nothing rather than a paid call.
+   */
+  @Post("pan")
+  async verifyPan(
+    @Req() request: RequestWithSession,
+    @Body(new ZodBody(PanCheckInputSchema)) body: PanCheckInput,
+  ) {
+    const session = sessionOf(request);
+    return this.kyc.verifyPan(session.userId, body.pan);
   }
 
   /**

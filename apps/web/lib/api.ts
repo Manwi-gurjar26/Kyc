@@ -118,16 +118,56 @@ export async function api<T>(path: string, options: CallOptions = {}): Promise<T
     if (roles.length > 0) headers["x-dev-staff-roles"] = roles.join(",");
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    /** KYC status changes constantly; a cached answer is always wrong. */
-    cache: "no-store",
-  });
+  let response: Response;
+
+  /**
+   * A dead API must arrive as an ApiCallError like everything else.
+   *
+   * `fetch` throws a bare TypeError("fetch failed") when nothing is listening,
+   * and that is not an ApiCallError — so every caller's `catch (error) { if
+   * (error instanceof ApiCallError) ... }` let it straight through and the
+   * server action crashed the page. What the user saw was a red Next.js
+   * overlay pointing at the <form> in ChooseKycType, which is the one place
+   * the problem is not: the API was simply not running.
+   */
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      /** KYC status changes constantly; a cached answer is always wrong. */
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new ApiCallError(503, {
+      code: "API_UNREACHABLE",
+      message:
+        "Could not reach the verification service. Please try again in a moment.",
+      /** The operator needs the address and the cause; the user does not. */
+      details: {
+        apiBase: API_BASE,
+        path,
+        cause: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
 
   const text = await response.text();
-  const parsed = text ? (JSON.parse(text) as unknown) : null;
+
+  /**
+   * Parsed in a try for the same reason: a proxy or a crashed process answers
+   * with HTML, and a raw SyntaxError hides both the status and the body.
+   */
+  let parsed: unknown;
+  try {
+    parsed = text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    throw new ApiCallError(502, {
+      code: "API_BAD_RESPONSE",
+      message: "The verification service returned an unreadable response.",
+      details: { apiBase: API_BASE, path, status: response.status, body: text.slice(0, 500) },
+    });
+  }
 
   if (!response.ok) {
     throw new ApiCallError(
@@ -170,16 +210,11 @@ export interface DevUser {
   createdAt: string;
 }
 
-export interface SessionResponse {
-  kycRecordId: string;
-  vendorSessionId: string;
-  clientToken: string;
-  expiresAt: string;
-  hostedUrl?: string;
-}
-
-export interface Scenario {
-  id: string;
-  label: string;
-  outcome: string;
-}
+/*
+ * `SessionResponse` and `Scenario` lived here and are gone with the
+ * hosted-vendor path: one described the POST /v1/kyc/sessions reply, the other
+ * the test-scenario picker on the form that opened it. The API still serves
+ * both endpoints — see the note in app/actions.ts — but nothing in this app
+ * calls them, and a response type for a call nobody makes reads as a feature
+ * that is still wired up.
+ */

@@ -28,6 +28,69 @@ function failure(error: unknown): Failure {
 }
 
 /* ------------------------------------------------------------------ */
+/* Selfie                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Asks for somewhere to put the selfie.
+ *
+ * Two calls rather than one, because the bytes do not come through here. The
+ * server mints a URL that is signed for one key, one content type and one
+ * size, the browser sends the image to it, and then the second call records
+ * that it arrived. An image routed through this action instead would mean
+ * every selfie passing through the web server's memory and logs for no gain.
+ *
+ * The URL is safe to hand to the browser: it is signed for a PUT of one
+ * object and expires in minutes. It is not a credential for anything else.
+ */
+export async function startSelfieUpload(input: {
+  sizeBytes: number;
+}): Promise<Failure & { url?: string; key?: string }> {
+  try {
+    const target = await api<{ url: string; key: string }>(
+      "/v1/documents/upload-url",
+      {
+        method: "POST",
+        body: {
+          docType: "SELFIE",
+          fileName: "selfie.jpg",
+          contentType: "image/jpeg",
+          sizeBytes: input.sizeBytes,
+        },
+      },
+    );
+
+    return { url: target.url, key: target.key };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Records that the upload landed, which is what starts the virus scan.
+ *
+ * Until this runs the object is in the bucket and unknown to us — there is no
+ * `documents` row, so nothing has been scanned and the decision step treats
+ * the person as having no selfie at all. That is the right default: an
+ * unscanned file is not evidence.
+ */
+export async function confirmSelfie(input: {
+  storageKey: string;
+  sha256: string;
+}): Promise<Failure & { scanStatus?: string }> {
+  try {
+    const confirmed = await api<{ scanStatus?: string }>("/v1/documents/confirm", {
+      method: "POST",
+      body: { storageKey: input.storageKey, sha256: input.sha256 },
+    });
+
+    return { scanStatus: confirmed.scanStatus };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Individual                                                         */
 /* ------------------------------------------------------------------ */
 

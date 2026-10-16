@@ -185,6 +185,28 @@ export interface AadhaarOtpResult extends AadhaarResult {
    * and when.
    */
   refToken: string;
+  /**
+   * The UIDAI photograph, as the gateway returned it — usually a data URL.
+   *
+   * Carried because the comparison against a selfie has to be made by a
+   * person: no gateway this system can reach sells a face match, so the only
+   * face check available is a reviewer looking at two images. Without this
+   * one there is nothing to look at.
+   *
+   * Passed through, never stored by the adapter. The caller decides where the
+   * bytes go, and it puts them in the object store rather than a column.
+   */
+  photo?: string;
+  /**
+   * Why the gateway said no, in its own words. Only set on a FAILED status.
+   *
+   * Without it a failed check is indistinguishable from every other failed
+   * check, and the only message we could honestly show was "check the number"
+   * — which sends somebody to re-read the twelve digits they typed correctly
+   * when the real answer was a wrong OTP or an expired reference. Carries a
+   * status and a sentence, never demographic data.
+   */
+  failureReason?: string;
 }
 
 export interface KycProvider {

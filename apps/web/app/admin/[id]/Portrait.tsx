@@ -14,10 +14,41 @@
 export function Portrait({
   seed,
   variant,
+  src,
 }: {
   seed: string;
   variant: "selfie" | "aadhaar";
+  /**
+   * The real photograph, when there is one.
+   *
+   * Given a URL this renders the actual image, which is the whole point now:
+   * no gateway this system can reach sells a face match, so a reviewer
+   * comparing these two by eye IS the face check. The drawn placeholder below
+   * stays for when there is nothing to show — the fake gateway returns no
+   * photograph, and a case can reach review before a selfie is uploaded.
+   */
+  src?: string | null;
 }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={
+          variant === "aadhaar"
+            ? "The Aadhaar photograph held by UIDAI"
+            : "The selfie taken during verification"
+        }
+        /**
+         * The Aadhaar image keeps the aged treatment because the image really
+         * is old and small — it is not decoration. Making a decade-old
+         * passport photo look crisp invites a reviewer to read a difference
+         * as a different person.
+         */
+        className={variant === "aadhaar" ? "portrait aged" : "portrait"}
+      />
+    );
+  }
+
   /** Stable per case, so the same case always looks the same. */
   const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 9973, 7);
   const skins = ["#C98E63", "#B9825C", "#D8A77B", "#A9714C"];

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { SandboxKycProvider } from "./sandboxKycProvider.js";
+import {
+  SandboxKycProvider,
+  type SandboxKycProviderOptions,
+} from "./sandboxKycProvider.js";
 /** Moved to the shared client when the KYB adapter began using them too. */
 import { expiryOf, isoDate } from "./sandboxClient.js";
 
@@ -88,6 +91,71 @@ describe("what it refuses before making a request", () => {
   test("a number of the wrong length is refused too", async () => {
     const provider = new SandboxKycProvider(OPTIONS);
     await expect(provider.sendAadhaarOtp("12345")).rejects.toThrow(/not valid/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * A stand-in for the transport, so the field mapping can be tested.
+ *
+ * The rest of this file avoids HTTP on the grounds that a mocked fetch only
+ * proves the mock matches my reading of the docs. This is narrower: the body
+ * below is copied from their published verify response, and what is under
+ * test is purely what our adapter does with it.
+ */
+function clientReturning(data: unknown) {
+  return {
+    name: "sandbox",
+    call: async () => ({
+      code: 200,
+      timestamp: 0,
+      transaction_id: "txn_test_1",
+      data,
+    }),
+  } as unknown as SandboxKycProviderOptions["client"];
+}
+
+describe("the Aadhaar photograph", () => {
+  /**
+   * Their verify response carries a photo and it used to be dropped.
+   *
+   * It matters now because this gateway sells no face match: the comparison
+   * against the selfie is done by a reviewer, and without this image there is
+   * nothing on screen to compare against.
+   */
+  test("the photograph is surfaced from the verify response", async () => {
+    const provider = new SandboxKycProvider({
+      ...OPTIONS,
+      client: clientReturning({
+        status: "VALID",
+        message: "Aadhaar Card Exists",
+        name: "John Doe",
+        date_of_birth: "21-04-1985",
+        photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+      }),
+    });
+
+    const result = await provider.verifyAadhaarOtp("1234567", "121212");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(result.photo).toBe("data:image/jpeg;base64,/9j/4AAQSkZJRg==");
+  });
+
+  /** Absent rather than empty: the fake gateway returns no photograph at all. */
+  test("a response with no photograph leaves it undefined", async () => {
+    const provider = new SandboxKycProvider({
+      ...OPTIONS,
+      client: clientReturning({
+        status: "VALID",
+        message: "Aadhaar Card Exists",
+        name: "John Doe",
+        date_of_birth: "21-04-1985",
+      }),
+    });
+
+    const result = await provider.verifyAadhaarOtp("1234567", "121212");
+    expect(result.photo).toBeUndefined();
   });
 });
 

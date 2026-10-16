@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { SelfieCapture } from "./SelfieCapture";
 import { sendAadhaarOtp, verifyIndividual } from "../actions";
 
 /**
@@ -172,33 +173,17 @@ export function IndividualForm() {
         </p>
       </div>
 
-      {/* ---- liveness ---- */}
-      <div className="frow">
-        <div className="frow-top">
-          <label htmlFor="selfie">Face liveness</label>
-          <span className="tag">Biometric</span>
-        </div>
+      {/*
+        ---- the photograph ----
 
-        <div className="selfie">
-          <div>
-            <div className="st">{selfie ? "Selfie captured" : "Take a live selfie"}</div>
-            <div className="ss">
-              {selfie
-                ? "Matched against your Aadhaar photo once submitted"
-                : "A two-second check that you are a live person"}
-            </div>
-          </div>
-          <button
-            id="selfie"
-            type="button"
-            className="cam"
-            aria-label="Take a live selfie"
-            onClick={() => setSelfie(true)}
-          >
-            {selfie ? "✓" : "◎"}
-          </button>
-        </div>
-      </div>
+        This was a button that set a boolean, under the words "a two-second
+        check that you are a live person" and "matched against your Aadhaar
+        photo once submitted". Nothing was captured, nothing was uploaded and
+        nothing was ever matched — the gateway sells no liveness check and no
+        face match. The real thing collects a photograph, scans it and stores
+        it for a reviewer, and says so.
+      */}
+      <SelfieCapture onDone={() => setSelfie(true)} />
 
       {note && !error && (
         <div className="okchip" role="status">

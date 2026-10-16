@@ -16,6 +16,7 @@ import {
   type Database,
   type ReviewAction,
 } from "@kilowattx/db";
+import type { FileStore } from "@kilowattx/integrations";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { DI, type AppConfig } from "../config.js";
@@ -62,6 +63,16 @@ export interface CaseDetail extends QueueRow {
   vendor: string | null;
   vendorVersion: string | null;
   reasons: { code: string; detail: string; severity: string }[];
+  /**
+   * Short-lived URLs for the two photographs, null when absent.
+   *
+   * These are the face check. No gateway this system can reach sells a face
+   * match, so a reviewer comparing the two images is the only comparison that
+   * happens — and null has to be distinguishable so the screen can say "not
+   * uploaded" rather than render a broken image.
+   */
+  selfieUrl: string | null;
+  aadhaarPhotoUrl: string | null;
   thresholdsUsed: Record<string, number> | null;
   checks: {
     checkType: string;
@@ -94,7 +105,57 @@ export class AdminService {
     @Inject(DI.DATABASE) private readonly db: Database,
     @Inject(DI.CLOCK) private readonly clock: Clock,
     @Inject(KycService) private readonly kyc: KycService,
+    /**
+     * Mints the short-lived URLs for the two photographs.
+     *
+     * The reviewer has to compare them by eye, because no gateway this system
+     * can reach sells a face match — so without these the one screen whose
+     * purpose is looking at evidence has no evidence on it.
+     */
+    @Inject(DI.FILE_STORE) private readonly files: FileStore,
   ) {}
+
+  /**
+   * A short-lived URL for an object-store key, or null when there is no key.
+   */
+  private async photoUrlFor(key: string | null): Promise<string | null> {
+    if (!key) return null;
+    const url = await this.files.createDownloadUrl({ key });
+    return url.url;
+  }
+
+  /**
+   * The subject's selfie, found by owner rather than by case.
+   *
+   * `documents.kyc_record_id` is null for anything uploaded through the
+   * ordinary upload endpoint — it does not pass one — so joining the case to
+   * its documents finds no selfie even though one is sitting in the bucket.
+   * Resolving by owner is what actually works today.
+   *
+   * CLEAN only, matching the decision: a quarantined file is not evidence,
+   * and handing a reviewer a URL to an infected image would be worse than
+   * showing them nothing.
+   */
+  private async selfieUrlFor(userId: string | null): Promise<string | null> {
+    if (!userId) return null;
+
+    const rows = await withContext(this.db, { role: "staff" }, (tx) =>
+      tx
+        .select({ storageKey: documents.storageKey })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.ownerUserId, userId),
+            eq(documents.docType, "SELFIE"),
+            eq(documents.scanStatus, "CLEAN"),
+          ),
+        )
+        .orderBy(desc(documents.createdAt))
+        .limit(1),
+    );
+
+    return this.photoUrlFor(rows[0]?.storageKey ?? null);
+  }
 
   /**
    * Which kind of case this is, and therefore who may act on it.
@@ -262,6 +323,16 @@ export class AdminService {
       thresholdsUsed: record.thresholdsUsed ?? null,
       faceMatchScore:
         record.faceMatchScore === null ? null : Number(record.faceMatchScore),
+      /**
+       * The two images, as short-lived URLs.
+       *
+       * Null when there is nothing to show, so the screen can fall back to
+       * its drawn placeholder rather than rendering a broken image — the
+       * fake gateway returns no photograph, and a case can reach review
+       * before a selfie is uploaded.
+       */
+      selfieUrl: await this.selfieUrlFor(record.userId),
+      aadhaarPhotoUrl: await this.photoUrlFor(record.aadhaarPhotoKey),
       createdAt: record.createdAt,
       waitingHours: this.hoursSince(record.createdAt),
       actionable: canReviewCase(staffRoles, caseType),
