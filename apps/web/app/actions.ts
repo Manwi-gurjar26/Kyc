@@ -140,7 +140,21 @@ export async function chooseKycType(
    * Outside the try on purpose. `redirect()` works by throwing, so catching
    * around it would swallow the navigation and report it as a failure.
    */
-  redirect(entity === "INDIVIDUAL" ? "/verify/individual" : "/verify/business");
+  /**
+   * A business goes to /commercial, which is the flow that actually works.
+   *
+   * There were two. This sent people to /verify/business, a single page that
+   * asked everybody for a GSTIN, a CIN, a certificate and a signatory PAN and
+   * then dropped all of it — `verifyBusiness` took its input, ignored it, and
+   * redirected to "done". The GSTIN lookup was real, so the only trace was a
+   * half-built organisation nobody finished.
+   *
+   * /commercial does the whole thing — company register, signatory, submit —
+   * and renders from the API's `remainingSteps` rather than a hardcoded list,
+   * which is the part that matters: a proprietorship has no company register,
+   * and the one-page form asked for one anyway.
+   */
+  redirect(entity === "INDIVIDUAL" ? "/verify/individual" : "/commercial");
 }
 
 /* ------------------------------------------------------------------ */
@@ -159,7 +173,7 @@ export async function chooseKycType(
  * than returning an empty session.
  *
  * So the button led to a 500 the moment the fake adapter was switched off. One
- * path in, now, through /verify/individual and /verify/business — the OTP is
+ * path in, now, through /verify/individual and /commercial — the OTP is
  * asked for on our own page, which is also the better flow: nobody is sent to
  * a domain they do not recognise in the middle of handing over an Aadhaar
  * number.

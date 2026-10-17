@@ -183,50 +183,18 @@ export async function verifyIndividual(input: {
 /* Business                                                           */
 /* ------------------------------------------------------------------ */
 
-export async function fetchGstin(gstin: string): Promise<
-  Failure & {
-    organisation?: {
-      legalName: string;
-      status: string;
-      constitution: string;
-      businessPan: string;
-    };
-  }
-> {
-  try {
-    await api("/v1/kyc/consents", {
-      method: "POST",
-      body: { purpose: "KYB_VERIFICATION", noticeVersion: "2.1", locale: "en" },
-    }).catch(() => undefined);
+/*
+ * `fetchGstin` and `verifyBusiness` are gone with /verify/business.
+ *
+ * They served a single page that asked every business for a GSTIN, a CIN, a
+ * certificate of incorporation and a signatory PAN, and then kept none of it:
+ * `verifyBusiness` took that input, ignored it, and redirected to "done". The
+ * GSTIN lookup was the only real call, so finishing the form left a half-built
+ * organisation and nothing else — and told the person they were verified.
+ *
+ * The business flow is /commercial, whose actions call the whole sequence:
+ * consent, GSTIN, company register, signatory, submit. It also renders from
+ * the API's `remainingSteps` instead of a fixed list, so a proprietorship is
+ * not asked for a company register it cannot have.
+ */
 
-    const result = await api<{
-      legalName: string;
-      gstStatus: string;
-      constitution: string;
-      businessPan: string;
-    }>("/v1/kyb/organisations", {
-      method: "POST",
-      idempotencyKey: `kyb-${gstin}`,
-      body: { gstin },
-    });
-
-    return {
-      organisation: {
-        legalName: result.legalName,
-        status: result.gstStatus,
-        constitution: result.constitution,
-        businessPan: result.businessPan,
-      },
-    };
-  } catch (error) {
-    return failure(error);
-  }
-}
-
-export async function verifyBusiness(_input: {
-  gstin: string;
-  cin: string;
-  signatoryPan: string;
-}): Promise<Failure> {
-  redirect("/verify/done");
-}
