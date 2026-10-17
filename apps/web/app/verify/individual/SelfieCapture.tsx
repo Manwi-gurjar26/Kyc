@@ -32,6 +32,20 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [cameraRefused, setCameraRefused] = useState(false);
+  /**
+   * Whether the stream has produced a frame yet.
+   *
+   * `play()` resolving is not the same thing. It means playback started, not
+   * that any pixels have arrived, and until the first frame lands
+   * `videoWidth` is 0 — so the canvas is sized 0x0 and the captured JPEG is
+   * nothing at all. The person then gets "we could not take the photo" for a
+   * camera that is working fine, and the only clue is that it stops happening
+   * if they wait a moment before pressing the button.
+   *
+   * Found by driving the flow in a real browser, where the capture button was
+   * live and useless for the first few seconds.
+   */
+  const [frameReady, setFrameReady] = useState(false);
 
   /**
    * Stops the camera.
@@ -47,8 +61,28 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
 
   useEffect(() => stopCamera, [stopCamera]);
 
+  /**
+   * Attaches the stream once the element is actually in the DOM.
+   *
+   * Runs after the render that introduces the <video>, which is the earliest
+   * moment `videoRef.current` exists. `play()` is called here too and its
+   * rejection ignored on purpose: some browsers reject it while still
+   * starting playback, and the capture button is gated on a real frame
+   * arriving rather than on this promise.
+   */
+  useEffect(() => {
+    if (stage !== "live") return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+  }, [stage]);
+
   async function openCamera() {
     setError(null);
+    setFrameReady(false);
     setStage("starting");
 
     try {
@@ -57,11 +91,19 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
         audio: false,
       });
 
+      /**
+       * Held, then attached by the effect below — not attached here.
+       *
+       * The <video> is only rendered once the stage is "live", so at this
+       * point `videoRef.current` is still null and assigning `srcObject` to it
+       * does nothing at all. The stream was acquired, the preview stayed
+       * black, `videoWidth` stayed 0, and the capture failed with "we could
+       * not take the photo" on a camera that was working perfectly.
+       *
+       * Driving the real browser is what exposed it: readyState never left 0,
+       * which only happens when the element has no source.
+       */
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setStage("live");
     } catch {
       /**
@@ -79,6 +121,13 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return null;
+
+    /**
+     * No frame, no photograph. Sizing the canvas to 0x0 and uploading the
+     * result would store an empty image that looks like a selfie in the
+     * database and shows a reviewer nothing.
+     */
+    if (!video.videoWidth || !video.videoHeight) return null;
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -205,7 +254,17 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
         <>
           <div className="cam">
             {/* Muted and inline, or iOS refuses to play it at all. */}
-            <video ref={videoRef} playsInline muted />
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              /**
+               * Both events, because which one fires first varies by browser
+               * and by whether the stream was already warm.
+               */
+              onLoadedMetadata={() => setFrameReady(true)}
+              onPlaying={() => setFrameReady(true)}
+            />
             <div className="oval" aria-hidden="true" />
             <div className="camhint">Look straight ahead, in even light</div>
           </div>
@@ -214,9 +273,10 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
             type="button"
             className="btn"
             onClick={capture}
+            disabled={!frameReady}
             style={{ marginTop: 10 }}
           >
-            Take the photo
+            {frameReady ? "Take the photo" : "Starting the camera…"}
           </button>
         </>
       )}

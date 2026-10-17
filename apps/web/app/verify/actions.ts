@@ -150,6 +150,32 @@ export async function verifyIndividual(input: {
     }
   }
 
+  /**
+   * The PAN actually goes somewhere now.
+   *
+   * It was collected by the form and then dropped: this branch redirected
+   * straight to /verify/done, so somebody typed their PAN, pressed a button
+   * labelled "Verify", landed on a page telling them they were finished, and
+   * no PAN had been checked — the record still said IN_PROGRESS with an empty
+   * pan_last4. The endpoint existed; nothing called it.
+   *
+   * This is also what triggers the decision, because the API decides at the
+   * end of the PAN step. Until this call was wired up, finishing the flow
+   * produced no decision at all and nobody reached the review queue.
+   */
+  try {
+    await api("/v1/kyc/pan", {
+      method: "POST",
+      body: { pan: input.pan },
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  /**
+   * Outside the try: redirect() works by throwing, so catching around it
+   * would swallow the navigation and report it as a failed PAN check.
+   */
   redirect("/verify/done");
 }
 
