@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { isValidAadhaarNumber } from "@kilowattx/validation";
 import {
   VendorRequestError,
+  type AadhaarRoute,
   VendorTimeoutError,
   type AadhaarOtpChallenge,
   type AadhaarOtpResult,
@@ -63,6 +64,18 @@ export interface FakeKycProviderOptions {
   clock?: () => Date;
   /** Applied when a request does not name its own scenario. */
   defaultScenario?: FakeScenario;
+  /**
+   * Which Aadhaar journey to pretend to be.
+   *
+   * The fake is the only adapter that can do both, which makes it the only
+   * one where this is a choice rather than a fact. It defaults to "OTP"
+   * because that is the flow the app has always used, and flipping the
+   * default would silently change what every existing test walks.
+   *
+   * Set "HOSTED" to rehearse the DigiLocker journey — leave the site, come
+   * back, collect — without the gateway.
+   */
+  aadhaarRoute?: AadhaarRoute;
 }
 
 /**
@@ -138,6 +151,9 @@ function standInUrl(
 export class FakeKycProvider implements KycProvider {
   readonly name = "fake";
 
+  /** Both are available here; the option decides. See the options type. */
+  readonly aadhaarRoute: AadhaarRoute;
+
   /**
    * The timestamped scheme, which is the stricter of the two: it gives local
    * development the replay window as well as the signature, so neither is
@@ -168,6 +184,7 @@ export class FakeKycProvider implements KycProvider {
   private readonly byIdempotencyKey = new Map<string, string>();
 
   constructor(options: FakeKycProviderOptions) {
+    this.aadhaarRoute = options.aadhaarRoute ?? "OTP";
     if (!options.webhookSecret) {
       throw new Error(
         "FakeKycProvider: a webhook secret is required. Running without one would let local development skip signature verification entirely.",

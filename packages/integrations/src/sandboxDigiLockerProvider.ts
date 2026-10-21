@@ -68,6 +68,9 @@ export interface SandboxDigiLockerOptions {
 export class SandboxDigiLockerProvider implements KycProvider {
   readonly name = "digilocker";
 
+  /** The person authenticates at DigiLocker; no number reaches us. */
+  readonly aadhaarRoute = "HOSTED" as const;
+
   /** Same scheme as the other Sandbox adapters, for the reconciliation path. */
   readonly webhookScheme = "hmac-body" as const;
 

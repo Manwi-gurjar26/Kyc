@@ -52,6 +52,9 @@ export interface SandboxKycProviderOptions {
 export class SandboxKycProvider implements KycProvider {
   readonly name = "sandbox";
 
+  /** OKYC: we take the number and exchange an OTP. Deprecated by UIDAI. */
+  readonly aadhaarRoute = "OTP" as const;
+
   /**
    * Their callbacks are not used for the OTP flow, which is synchronous.
    * Declared because the interface requires it and because the reconciliation

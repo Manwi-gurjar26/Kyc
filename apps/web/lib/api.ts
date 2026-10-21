@@ -200,6 +200,14 @@ export interface KycStatusView {
   reasonCodes: string[];
   remainingSteps: string[];
   verifiedAt: string | null;
+  /**
+   * How this deployment collects an Aadhaar.
+   *
+   * "OTP" takes a number and exchanges a code; "HOSTED" sends the person to
+   * the gateway's own site and never sees a number. The first screen differs
+   * entirely between them, so the page asks rather than assumes.
+   */
+  aadhaarRoute: "OTP" | "HOSTED";
 }
 
 export interface DevUser {

@@ -222,10 +222,28 @@ export interface AadhaarOtpResult extends AadhaarResult {
   failureReason?: string;
 }
 
+/**
+ * How a gateway collects an Aadhaar.
+ *
+ * "OTP"    — we take the number, the gateway sends a code, we send it back.
+ * "HOSTED" — the person goes to the gateway's own site and we never see a
+ *            number at all.
+ *
+ * Declared by each adapter rather than inferred from its name, because the
+ * screen a person sees differs entirely between the two and the web has to
+ * know which to render. Guessing from a provider string would mean every new
+ * adapter silently falls into whichever branch the comparison happens to
+ * miss — and the one that renders an Aadhaar number field for a gateway that
+ * must never receive one is the wrong way to be wrong.
+ */
+export type AadhaarRoute = "OTP" | "HOSTED";
+
 export interface KycProvider {
   readonly name: string;
   /** How this vendor signs its webhooks. */
   readonly webhookScheme: WebhookScheme;
+  /** Which Aadhaar journey this gateway supports. See AadhaarRoute. */
+  readonly aadhaarRoute: AadhaarRoute;
 
   createSession(request: CreateSessionRequest): Promise<KycSession>;
 

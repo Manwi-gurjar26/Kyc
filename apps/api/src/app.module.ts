@@ -107,6 +107,12 @@ function buildKycProvider(
     case "fake":
       return new FakeKycProvider({
         webhookSecret: config.KYC_WEBHOOK_SECRET,
+        /**
+         * Development only: which Aadhaar journey the fake pretends to be.
+         * Lets the hosted screens be walked without the gateway. Defaults to
+         * OTP, which is what every existing test expects.
+         */
+        aadhaarRoute: process.env.FAKE_AADHAAR_ROUTE === "HOSTED" ? "HOSTED" : "OTP",
       });
 
     /*

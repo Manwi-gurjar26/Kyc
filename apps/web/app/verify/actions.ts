@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { ApiCallError, api } from "../../lib/api";
 
@@ -25,6 +26,76 @@ function failure(error: unknown): Failure {
       message: "Something went wrong on our side. Please try again.",
     },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* The hosted Aadhaar route                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Opens a hosted session and hands back where to send the person.
+ *
+ * Consent is recorded first and separately, because nothing may reach a
+ * gateway before there is a row saying what was agreed to — and this call
+ * costs money the moment it succeeds.
+ */
+export async function startHostedAadhaar(): Promise<
+  Failure & { hostedUrl?: string }
+> {
+  try {
+    const consent = await api<{ id: string }>("/v1/kyc/consents", {
+      method: "POST",
+      body: { purpose: "KYC_VERIFICATION", noticeVersion: "2.1", locale: "en" },
+    });
+
+    const session = await api<{ hostedUrl?: string }>("/v1/kyc/sessions", {
+      method: "POST",
+      /** One key per genuine attempt, so a double click opens one session. */
+      idempotencyKey: `web-${randomUUID()}`,
+      body: {
+        level: "FULL",
+        role: "LAND_OWNER",
+        locale: "en",
+        consentId: consent.id,
+      },
+    });
+
+    if (!session.hostedUrl) {
+      return {
+        error: {
+          code: "NO_HOSTED_URL",
+          message:
+            "The verification service did not give us anywhere to send you. Please try again shortly.",
+        },
+      };
+    }
+
+    return { hostedUrl: session.hostedUrl };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Asks the server what came of a session, once the person is back.
+ *
+ * The browser reports only that they returned. What actually happened is
+ * fetched from the gateway server-to-server, which is why this sends nothing
+ * but the session id — there is no outcome the page could tell us that we
+ * would believe.
+ */
+export async function collectHostedAadhaar(
+  vendorSessionId: string,
+): Promise<Failure & { status?: string; reasonCodes?: string[] }> {
+  try {
+    const result = await api<{ status: string; reasonCodes: string[] }>(
+      `/v1/kyc/sessions/${encodeURIComponent(vendorSessionId)}/collect`,
+      { method: "POST" },
+    );
+    return { status: result.status, reasonCodes: result.reasonCodes };
+  } catch (error) {
+    return failure(error);
+  }
 }
 
 /* ------------------------------------------------------------------ */

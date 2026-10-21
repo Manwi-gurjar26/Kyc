@@ -30,6 +30,7 @@ import {
   ReplayGuard,
   verifyWebhook,
   type KybProvider,
+  type AadhaarRoute,
   type KycProvider,
   type VendorKycResult,
   VendorRequestError,
@@ -69,6 +70,14 @@ export interface KycStatusView {
   reasonCodes: string[];
   remainingSteps: string[];
   verifiedAt: Date | null;
+  /**
+   * How this deployment collects an Aadhaar, so the client knows which screen
+   * to render: a number and an OTP box, or a button to a government site.
+   *
+   * Not a secret — it is plain from the page either way — and not the vendor's
+   * name, which the health endpoint deliberately withholds.
+   */
+  aadhaarRoute: AadhaarRoute;
 }
 
 /**
@@ -1218,6 +1227,7 @@ export class KycService {
         panLast4: null,
         reasonCodes: [],
         remainingSteps: ["CONSENT", "AADHAAR", "PAN", "SELFIE"],
+        aadhaarRoute: this.provider.aadhaarRoute,
         verifiedAt: null,
       };
     }
@@ -1230,6 +1240,7 @@ export class KycService {
       reasonCodes: (record.decisionReasons ?? []).map((r) => r.code),
       remainingSteps: this.remainingSteps(record, await this.hasCleanSelfie(userId)),
       verifiedAt: record.verifiedAt,
+      aadhaarRoute: this.provider.aadhaarRoute,
     };
   }
 

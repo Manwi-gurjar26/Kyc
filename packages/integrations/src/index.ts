@@ -37,6 +37,7 @@ export {
   type FakeScenario,
   type GstLookupResult,
   type KybProvider,
+  type AadhaarRoute,
   type KycProvider,
   type KycProviderName,
   type KycRole,

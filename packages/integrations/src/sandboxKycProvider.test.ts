@@ -221,3 +221,9 @@ describe("how long the access token is good for", () => {
     expect(expiryOf(`header.${Buffer.from("{}").toString("base64url")}.sig`)).toBeUndefined();
   });
 });
+
+describe("how this gateway collects Aadhaar", () => {
+  test("OKYC is an OTP route", () => {
+    expect(new SandboxKycProvider(OPTIONS).aadhaarRoute).toBe("OTP");
+  });
+});

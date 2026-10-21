@@ -269,3 +269,25 @@ describe("the routes this gateway does not have", () => {
     );
   });
 });
+
+/* ------------------------------------------------------------------ */
+
+describe("how this gateway collects Aadhaar", () => {
+  /**
+   * Declared rather than inferred.
+   *
+   * Two Aadhaar routes now exist and the screen a person sees differs
+   * entirely between them — a number and an OTP box, or a button that sends
+   * them to a government site. The web has to know which, and working it out
+   * from the provider's name would mean every new adapter silently defaults
+   * to whichever branch the string comparison happens to miss.
+   */
+  test("DigiLocker is a hosted route, not an OTP one", () => {
+    const provider = new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      client: clientFor({}),
+    });
+
+    expect(provider.aadhaarRoute).toBe("HOSTED");
+  });
+});
