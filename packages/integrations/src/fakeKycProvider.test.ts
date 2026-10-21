@@ -49,6 +49,53 @@ describe("FakeKycProvider — sessions", () => {
   });
 
   /**
+   * The hosted URL has to lead somewhere that exists.
+   *
+   * It pointed at http://localhost:4000/fake-vendor/kyc/… for as long as this
+   * fake has existed, and no such route was ever written — so "walk the
+   * hosted flow in development" was never actually possible. The stand-in
+   * lives on the web app, which is where a page a person looks at belongs.
+   */
+  test("the hosted URL points at the stand-in on the web app", async () => {
+    const session = await provider.createSession(
+      request({ redirectUrl: "http://localhost:3000/verify/digilocker/return" }),
+    );
+
+    const url = new URL(session.hostedUrl!);
+    expect(url.origin).toBe("http://localhost:3000");
+    expect(url.pathname).toBe("/fake-digilocker");
+  });
+
+  /**
+   * And it has to carry the way back.
+   *
+   * A hosted flow is only a flow if the person returns; `redirectUrl` was
+   * accepted and then ignored, so the stand-in had nowhere to send anybody.
+   * This is the half of the DigiLocker shape that the gateway cannot be asked
+   * to rehearse.
+   */
+  test("the hosted URL carries the session and the way back", async () => {
+    const session = await provider.createSession(
+      request({ redirectUrl: "http://localhost:3000/verify/digilocker/return" }),
+    );
+
+    const url = new URL(session.hostedUrl!);
+    expect(url.searchParams.get("session")).toBe(session.vendorSessionId);
+    expect(url.searchParams.get("redirect_url")).toBe(
+      "http://localhost:3000/verify/digilocker/return",
+    );
+  });
+
+  /** Whatever host the caller is on — the fake must not pin it to localhost. */
+  test("the stand-in follows the caller's origin", async () => {
+    const session = await provider.createSession(
+      request({ redirectUrl: "https://kyc.example.test/verify/digilocker/return" }),
+    );
+
+    expect(new URL(session.hostedUrl!).origin).toBe("https://kyc.example.test");
+  });
+
+  /**
    * The client token must be scoped to the session. A token that works for
    * any session is as good as the API key we were avoiding handing out.
    */

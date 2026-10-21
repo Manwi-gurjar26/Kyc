@@ -98,6 +98,43 @@ const SESSION_TTL_MINUTES = 20;
 /** How late the late_webhook scenario is, in seconds. */
 const LATE_WEBHOOK_DELAY_SECONDS = 90;
 
+/**
+ * Where the fake sends somebody instead of a real gateway.
+ *
+ * It used to be `http://localhost:4000/fake-vendor/kyc/{id}`, and no such
+ * route was ever written — so the hosted flow could not actually be walked in
+ * development, which is the one thing a fake hosted flow is for. The stand-in
+ * is a page on the web app, because that is where a page a person looks at
+ * belongs; the API has no business rendering a consent screen.
+ *
+ * The origin is taken from the caller's own redirect URL rather than pinned
+ * to localhost, so this still works behind a tunnel, on a preview deployment,
+ * or anywhere the web app is not where the fake guessed it would be.
+ *
+ * The redirect travels in the URL because the stand-in has to send the person
+ * back, and that is the half of a hosted flow the gateway cannot be asked to
+ * rehearse: leave the site, come back, and the server asks what happened.
+ */
+function standInUrl(
+  redirectUrl: string,
+  vendorSessionId: string,
+  locale: string,
+): string {
+  let origin = "http://localhost:3000";
+  try {
+    origin = new URL(redirectUrl).origin;
+  } catch {
+    /* A malformed redirect is the caller's problem; the default keeps the
+       fake usable rather than throwing inside a test fixture. */
+  }
+
+  const url = new URL("/fake-digilocker", origin);
+  url.searchParams.set("session", vendorSessionId);
+  url.searchParams.set("redirect_url", redirectUrl);
+  url.searchParams.set("lang", locale);
+  return url.toString();
+}
+
 export class FakeKycProvider implements KycProvider {
   readonly name = "fake";
 
@@ -171,7 +208,7 @@ export class FakeKycProvider implements KycProvider {
         .digest("hex")
         .slice(0, 32)}`,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MINUTES * 60 * 1000),
-      hostedUrl: `http://localhost:4000/fake-vendor/kyc/${vendorSessionId}?lang=${request.locale}`,
+      hostedUrl: standInUrl(request.redirectUrl, vendorSessionId, request.locale),
     };
 
     /**
