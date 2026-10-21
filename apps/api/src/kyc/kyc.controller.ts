@@ -15,6 +15,7 @@ import {
   Get,
   Headers,
   Inject,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -119,6 +120,26 @@ export class KycController {
     }
 
     return this.kyc.createSession(session.userId, body, idempotencyKey.trim());
+  }
+
+  /**
+   * Collects the outcome after a hosted flow sends the person back.
+   *
+   * Called by the return page, with the session id it was handed. The body is
+   * empty on purpose: there is nothing the browser could tell us about the
+   * outcome that we would believe. It says "they are back"; the server asks
+   * the gateway what actually happened.
+   *
+   * Safe to call twice. Somebody reloading the page gets the decision already
+   * recorded, without a second vendor call.
+   */
+  @Post("sessions/:vendorSessionId/collect")
+  async collectSession(
+    @Req() request: RequestWithSession,
+    @Param("vendorSessionId") vendorSessionId: string,
+  ) {
+    const session = sessionOf(request);
+    return this.kyc.collectSession(session.userId, vendorSessionId);
   }
 
   /* ---------------------------------------------------------------- */

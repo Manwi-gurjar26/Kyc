@@ -1496,6 +1496,91 @@ export class KycService {
   }
 
   /**
+   * Collects the outcome of a hosted session, after the person comes back.
+   *
+   * The browser's return is a notification that something happened, never a
+   * report of what. This asks the gateway itself — the same rule the webhook
+   * path follows, and the reason a webhook body is not believed either.
+   *
+   * It exists because DigiLocker has no webhook: the person returning to our
+   * page is the only signal there is. See
+   * docs/superpowers/specs/2026-10-21-digilocker-migration-design.md.
+   */
+  async collectSession(
+    userId: string,
+    vendorSessionId: string,
+  ): Promise<{ status: KycStatus; reasonCodes: string[] }> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({
+          id: kycRecords.id,
+          status: kycRecords.status,
+          userId: kycRecords.userId,
+          reasons: kycRecords.decisionReasons,
+        })
+        .from(kycRecords)
+        .where(eq(kycRecords.vendorSessionId, vendorSessionId))
+        .limit(1),
+    );
+
+    const record = rows[0];
+
+    /**
+     * Scoped to the caller, and 404 rather than 403 for somebody else's
+     * session.
+     *
+     * The id arrives through the browser, so it is a claim rather than a
+     * credential — collecting another person's session would write their
+     * verification onto your record. Answering "forbidden" would also confirm
+     * the session exists, which is a question a stranger has no business
+     * getting an answer to.
+     */
+    if (!record || record.userId !== userId) {
+      throw ApiError.notFound(
+        "SESSION_NOT_FOUND",
+        "That verification session does not exist.",
+      );
+    }
+
+    /**
+     * Already decided, so say so without asking the gateway again.
+     *
+     * Somebody reloading the return page out of impatience must not re-apply
+     * a decision: `applyKycDecision` refuses a transition to the status
+     * already held and would turn a 201 into a 500. It also saves a paid
+     * vendor call for an answer we have written down.
+     */
+    if (record.status !== "NOT_STARTED" && record.status !== "IN_PROGRESS") {
+      return {
+        status: record.status as KycStatus,
+        reasonCodes: (record.reasons ?? []).map((r) => r.code),
+      };
+    }
+
+    let result: VendorKycResult;
+    try {
+      result = await this.provider.fetchResult(vendorSessionId);
+    } catch (error) {
+      throw this.vendorFailure(error, "We could not check that verification just now.");
+    }
+
+    const status = await this.decideAndApply(result);
+
+    const after = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ reasons: kycRecords.decisionReasons })
+        .from(kycRecords)
+        .where(eq(kycRecords.id, record.id))
+        .limit(1),
+    );
+
+    return {
+      status,
+      reasonCodes: (after[0]?.reasons ?? []).map((r) => r.code),
+    };
+  }
+
+  /**
    * Turns a vendor result into a decision and writes it.
    *
    * Delegates to @kilowattx/kyc-pipeline, which the worker's reconciliation
