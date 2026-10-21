@@ -93,6 +93,10 @@ export {
   SandboxKycProvider,
   type SandboxKycProviderOptions,
 } from "./sandboxKycProvider.js";
+export {
+  SandboxDigiLockerProvider,
+  type SandboxDigiLockerOptions,
+} from "./sandboxDigiLockerProvider.js";
 
 export { FakeKybProvider } from "./fakeKybProvider.js";
 

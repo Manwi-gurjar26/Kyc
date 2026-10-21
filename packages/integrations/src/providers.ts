@@ -66,7 +66,14 @@ export class VendorRequestError extends VendorError {
  * healthy. Both config schemas now read this array, so the next value can only
  * be added in one place.
  */
-export const KYC_PROVIDERS = ["fake", "sandbox", "cashfree"] as const;
+export const KYC_PROVIDERS = [
+  "fake",
+  /** Sandbox's Aadhaar OKYC. Deprecated by UIDAI; see the DigiLocker spec. */
+  "sandbox",
+  /** Sandbox's DigiLocker flow — the replacement Aadhaar route. */
+  "digilocker",
+  "cashfree",
+] as const;
 
 export type KycProviderName = (typeof KYC_PROVIDERS)[number];
 
@@ -97,8 +104,14 @@ export interface KycSession {
    *
    * Our vendor API key never leaves the server. This token is scoped to one
    * session and expires in minutes, so a leaked one is worth almost nothing.
+   *
+   * Optional, because not every hosted flow has one. DigiLocker's
+   * authorization URL carries its own state and PKCE challenge, so the URL
+   * IS the credential and there is no second token to hand over. Returning
+   * the session id here to fill the field would describe it as a short-lived
+   * secret, which it is not.
    */
-  clientToken: string;
+  clientToken?: string;
   expiresAt: Date;
   /**
    * A vendor-hosted web flow, when the vendor offers one.

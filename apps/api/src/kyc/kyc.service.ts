@@ -262,8 +262,12 @@ export class KycService {
     idempotencyKey: string,
   ): Promise<{
     kycRecordId: string;
+    /**
+     * Absent for a gateway whose hosted URL is its own credential, which
+     * DigiLocker's is — there is no second token to hand the browser.
+     */
+    clientToken?: string;
     vendorSessionId: string;
-    clientToken: string;
     expiresAt: Date;
     hostedUrl?: string;
   }> {
