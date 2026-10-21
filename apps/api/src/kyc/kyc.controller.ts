@@ -143,35 +143,24 @@ export class KycController {
   }
 
   /* ---------------------------------------------------------------- */
-  /* Aadhaar OTP                                                      */
+  /* Aadhaar OTP — removed                                            */
   /* ---------------------------------------------------------------- */
 
-  /**
-   * Step one of Aadhaar eKYC: send the OTP.
+  /*
+   * POST aadhaar/otp and aadhaar/verify are gone.
    *
-   * The number is validated here, offline, before it costs a gateway call —
-   * the Verhoeff checksum catches a mistyped digit for nothing.
+   * They were the OKYC route: take a number, have UIDAI send a one-time
+   * password, send the code back. UIDAI deprecated that endpoint and it has
+   * returned 503 "Source Unavailable" on live keys since 16 October, so the
+   * routes could only fail. Aadhaar is collected at DigiLocker now, through
+   * POST sessions and sessions/:id/collect below.
+   *
+   * KycService still has startAadhaarOtp and confirmAadhaarOtp, and the
+   * challenge table is still there, on purpose: no DigiLocker verification
+   * has completed end to end yet, and flipping KYC_PROVIDER back is the
+   * fallback if its field mapping turns out wrong. What is removed here is
+   * the route somebody could reach, not the capability.
    */
-  @Post("aadhaar/otp")
-  async sendAadhaarOtp(
-    @Req() request: RequestWithSession,
-    @Body() body: unknown,
-  ) {
-    const session = sessionOf(request);
-    const input = AadhaarOtpRequestSchema.parse(body);
-    return this.kyc.startAadhaarOtp(session.userId, input.aadhaarNumber);
-  }
-
-  /** Step two: submit the OTP the person received. */
-  @Post("aadhaar/verify")
-  async verifyAadhaarOtp(
-    @Req() request: RequestWithSession,
-    @Body() body: unknown,
-  ) {
-    const session = sessionOf(request);
-    const input = AadhaarOtpVerifySchema.parse(body);
-    return this.kyc.confirmAadhaarOtp(session.userId, input.otp);
-  }
 
   /* ---------------------------------------------------------------- */
   /* PAN                                                              */

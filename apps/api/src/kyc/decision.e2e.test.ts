@@ -75,19 +75,35 @@ async function consented(): Promise<string> {
   return userId;
 }
 
-/** Consent and a confirmed Aadhaar: the state the PAN step requires. */
+/**
+ * Establishes a verified Aadhaar directly in the database.
+ *
+ * It used to walk the OTP endpoints, which no longer exist: Aadhaar is
+ * collected at DigiLocker now and the hosted route cannot be driven from a
+ * test — it ends at a government sign-in page.
+ *
+ * Written as a row rather than through the hosted flow on purpose. The fake
+ * gateway's hosted result carries Aadhaar, PAN and a selfie together, so
+ * collecting it would leave nothing outstanding and these files are about
+ * what happens when PAN is still to come. What is under test here is the PAN
+ * step and the decision; the Aadhaar step has its own coverage.
+ *
+ * The four columns are exactly what a completed Aadhaar leaves behind, and
+ * `aadhaar_ref_token` is the one that matters — it is what the decision
+ * treats as proof the check actually happened.
+ */
 async function verifiedAadhaar(): Promise<string> {
   const userId = await consented();
-  await http()
-    .post("/v1/kyc/aadhaar/otp")
-    .set(as(userId))
-    .send({ aadhaarNumber: AADHAAR })
-    .expect(201);
-  await http()
-    .post("/v1/kyc/aadhaar/verify")
-    .set(as(userId))
-    .send({ otp: RIGHT_OTP })
-    .expect(201);
+
+  await owner.sql.unsafe(
+    `INSERT INTO kyc_records
+       (user_id, subject_type, level, status,
+        aadhaar_last4, aadhaar_ref_token, aadhaar_name, aadhaar_dob)
+     VALUES ('${userId}', 'PERSON', 'FULL', 'IN_PROGRESS',
+             '7058', 'dl_sess_${Math.random().toString(36).slice(2, 12)}',
+             'Anita Desai', '1986-04-17')`,
+  );
+
   return userId;
 }
 

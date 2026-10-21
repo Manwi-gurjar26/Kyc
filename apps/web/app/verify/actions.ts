@@ -165,80 +165,31 @@ export async function confirmSelfie(input: {
 /* Individual                                                         */
 /* ------------------------------------------------------------------ */
 
+/*
+ * `sendAadhaarOtp` and `verifyIndividual` are gone.
+ *
+ * They took an Aadhaar number, asked the gateway to send a one-time password
+ * to the mobile registered against it, and sent the code back. Aadhaar is
+ * collected at DigiLocker now — on the government's own site, under the
+ * person's own account — so no number and no code passes through this
+ * application at all.
+ *
+ * The provider methods and the challenge table are deliberately still there.
+ * No DigiLocker verification has completed end to end yet, and the only thing
+ * worse than one dead Aadhaar route is two: flipping KYC_PROVIDER back is the
+ * fallback, and deleting the code behind it would remove that.
+ */
 
-export async function sendAadhaarOtp(
-  aadhaarNumber: string,
-): Promise<Failure & { sentTo?: string }> {
+/**
+ * Submits the PAN, which is also what triggers the decision.
+ *
+ * What is left of `verifyIndividual` once its OTP stage went. The API decides
+ * at the end of the PAN step, so this call is what moves somebody out of
+ * IN_PROGRESS and into the review queue.
+ */
+export async function submitPan(pan: string): Promise<Failure> {
   try {
-    /**
-     * Consent before the number moves. Recorded first, every time: a consent
-     * row written after the fact proves nothing about what the person agreed
-     * to before their Aadhaar was sent to a third party.
-     */
-    await api("/v1/kyc/consents", {
-      method: "POST",
-      body: { purpose: "KYC_VERIFICATION", noticeVersion: "2.1", locale: "en" },
-    }).catch(() => undefined);
-
-    const result = await api<{ referenceId: string; sentTo: string }>(
-      "/v1/kyc/aadhaar/otp",
-      { method: "POST", body: { aadhaarNumber } },
-    );
-
-    return { sentTo: `OTP sent to ${result.sentTo}` };
-  } catch (error) {
-    return failure(error);
-  }
-}
-
-export async function verifyIndividual(input: {
-  stage: "otp" | "finish";
-  otp?: string;
-  pan?: string;
-}): Promise<Failure & { message?: string }> {
-  if (input.stage === "otp") {
-    try {
-      /**
-       * Only the six digits go up.
-       *
-       * The gateway's reference id lives in Postgres against the signed-in
-       * person. It used to be held here in a module-level variable — one
-       * variable shared by every request this process served, so two people
-       * verifying at the same moment overwrote each other and the second
-       * person's OTP was checked against the first person's challenge.
-       */
-      const result = await api<{ last4: string; nameOnRecord?: string }>(
-        "/v1/kyc/aadhaar/verify",
-        { method: "POST", body: { otp: input.otp } },
-      );
-      return {
-        message: result.nameOnRecord
-          ? `Aadhaar confirmed for ${result.nameOnRecord}.`
-          : "Aadhaar confirmed.",
-      };
-    } catch (error) {
-      return failure(error);
-    }
-  }
-
-  /**
-   * The PAN actually goes somewhere now.
-   *
-   * It was collected by the form and then dropped: this branch redirected
-   * straight to /verify/done, so somebody typed their PAN, pressed a button
-   * labelled "Verify", landed on a page telling them they were finished, and
-   * no PAN had been checked — the record still said IN_PROGRESS with an empty
-   * pan_last4. The endpoint existed; nothing called it.
-   *
-   * This is also what triggers the decision, because the API decides at the
-   * end of the PAN step. Until this call was wired up, finishing the flow
-   * produced no decision at all and nobody reached the review queue.
-   */
-  try {
-    await api("/v1/kyc/pan", {
-      method: "POST",
-      body: { pan: input.pan },
-    });
+    await api("/v1/kyc/pan", { method: "POST", body: { pan } });
   } catch (error) {
     return failure(error);
   }
@@ -249,23 +200,3 @@ export async function verifyIndividual(input: {
    */
   redirect("/verify/done");
 }
-
-/* ------------------------------------------------------------------ */
-/* Business                                                           */
-/* ------------------------------------------------------------------ */
-
-/*
- * `fetchGstin` and `verifyBusiness` are gone with /verify/business.
- *
- * They served a single page that asked every business for a GSTIN, a CIN, a
- * certificate of incorporation and a signatory PAN, and then kept none of it:
- * `verifyBusiness` took that input, ignored it, and redirected to "done". The
- * GSTIN lookup was the only real call, so finishing the form left a half-built
- * organisation and nothing else — and told the person they were verified.
- *
- * The business flow is /commercial, whose actions call the whole sequence:
- * consent, GSTIN, company register, signatory, submit. It also renders from
- * the API's `remainingSteps` instead of a fixed list, so a proprietorship is
- * not asked for a company register it cannot have.
- */
-

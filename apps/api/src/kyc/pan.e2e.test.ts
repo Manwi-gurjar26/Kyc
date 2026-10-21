@@ -81,24 +81,34 @@ async function consented(): Promise<string> {
 }
 
 /**
- * Consent, then a completed Aadhaar — the state PAN verification requires.
+ * Establishes a verified Aadhaar directly in the database.
  *
- * It has to be the real two calls rather than a row written directly, because
- * what PAN depends on is the name and date of birth that the Aadhaar step
- * stores, and writing the row by hand would skip the thing under test.
+ * It used to walk the OTP endpoints, which no longer exist: Aadhaar is
+ * collected at DigiLocker now and the hosted route cannot be driven from a
+ * test — it ends at a government sign-in page.
+ *
+ * Written as a row rather than through the hosted flow on purpose. The fake
+ * gateway's hosted result carries Aadhaar, PAN and a selfie together, so
+ * collecting it would leave nothing outstanding and these files are about
+ * what happens when PAN is still to come. What is under test here is the PAN
+ * step and the decision; the Aadhaar step has its own coverage.
+ *
+ * The four columns are exactly what a completed Aadhaar leaves behind, and
+ * `aadhaar_ref_token` is the one that matters — it is what the decision
+ * treats as proof the check actually happened.
  */
 async function verifiedAadhaar(): Promise<string> {
   const userId = await consented();
-  await http()
-    .post("/v1/kyc/aadhaar/otp")
-    .set(as(userId))
-    .send({ aadhaarNumber: AADHAAR })
-    .expect(201);
-  await http()
-    .post("/v1/kyc/aadhaar/verify")
-    .set(as(userId))
-    .send({ otp: RIGHT_OTP })
-    .expect(201);
+
+  await owner.sql.unsafe(
+    `INSERT INTO kyc_records
+       (user_id, subject_type, level, status,
+        aadhaar_last4, aadhaar_ref_token, aadhaar_name, aadhaar_dob)
+     VALUES ('${userId}', 'PERSON', 'FULL', 'IN_PROGRESS',
+             '7058', 'dl_sess_${Math.random().toString(36).slice(2, 12)}',
+             'Anita Desai', '1986-04-17')`,
+  );
+
   return userId;
 }
 
@@ -229,13 +239,18 @@ describe("what it refuses to do", () => {
    * A check that looked for "a record" rather than "a name" would pass here
    * and then send the Department an undefined name.
    */
-  test("an unconfirmed OTP is not a verified Aadhaar", async () => {
+  test("a record without a reference token is not a verified Aadhaar", async () => {
     const userId = await consented();
-    await http()
-      .post("/v1/kyc/aadhaar/otp")
-      .set(as(userId))
-      .send({ aadhaarNumber: AADHAAR })
-      .expect(201);
+
+    /**
+     * Four digits and nothing else — the state a half-finished Aadhaar leaves
+     * behind. A check that looked for "a record" rather than "a reference
+     * token" would pass here and then send the Department an undefined name.
+     */
+    await owner.sql.unsafe(
+      `INSERT INTO kyc_records (user_id, subject_type, level, status, aadhaar_last4)
+       VALUES ('${userId}', 'PERSON', 'FULL', 'IN_PROGRESS', '7058')`,
+    );
 
     const response = await http()
       .post("/v1/kyc/pan")

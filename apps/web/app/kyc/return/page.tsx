@@ -133,8 +133,13 @@ export default async function HostedReturnPage({
         </div>
       )}
 
-      <Link className="cta" href="/status">
-        See where you stand →
+      {/*
+        On to the rest of it. Aadhaar is only the first of three steps, and a
+        person who has just come back from a government site has no way of
+        knowing that unless this says so.
+      */}
+      <Link className="cta" href={status === "IN_PROGRESS" ? "/verify/individual" : "/status"}>
+        {status === "IN_PROGRESS" ? "Continue — PAN and a photo →" : "See where you stand →"}
       </Link>
 
       <p className="footnote">
