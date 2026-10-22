@@ -52,6 +52,9 @@ export interface SandboxKycProviderOptions {
 export class SandboxKycProvider implements KycProvider {
   readonly name = "sandbox";
 
+  /** OKYC: we take the number and exchange an OTP. Deprecated by UIDAI. */
+  readonly aadhaarRoute = "OTP" as const;
+
   /**
    * Their callbacks are not used for the OTP flow, which is synchronous.
    * Declared because the interface requires it and because the reconciliation
@@ -117,6 +120,8 @@ export class SandboxKycProvider implements KycProvider {
       date_of_birth?: string;
       gender?: string;
       year_of_birth?: string;
+      /** A data URL. Needed because nobody here sells a face match. */
+      photo?: string;
     }>("/kyc/aadhaar/okyc/otp/verify", {
       "@entity": "in.co.sandbox.kyc.aadhaar.okyc.request",
       reference_id: referenceId,
@@ -125,17 +130,41 @@ export class SandboxKycProvider implements KycProvider {
 
     const record = body.data;
 
+    /**
+     * Their documented success value, and the only one treated as a pass.
+     *
+     * An absent `data` is covered by the optional chain rather than throwing:
+     * `undefined === "VALID"` is false, so a response in a shape we did not
+     * expect fails the check instead of crashing on the way to reporting it.
+     */
+    const passed = record?.status === "VALID";
+
     return {
       /**
        * Anything other than VALID is a failure, not an absence. A missing
        * check must never read as a passing one, which is why this maps to
        * FAILED rather than leaving the field undefined.
        */
-      status: record.status === "VALID" ? "SUCCESS" : "FAILED",
-      nameOnRecord: record.name,
-      dateOfBirth: isoDate(record.date_of_birth),
+      status: passed ? "SUCCESS" : "FAILED",
+      nameOnRecord: record?.name,
+      dateOfBirth: isoDate(record?.date_of_birth),
       /** Their transaction id is what we quote back when asked what we checked. */
       refToken: body.transaction_id,
+      /** Handed up for a reviewer to compare against the selfie. */
+      photo: record?.photo,
+      /**
+       * Their status and their sentence, passed up only on a failure. One of
+       * the two is usually enough to tell a wrong OTP from an expired
+       * reference id, which is the distinction that was missing.
+       */
+      ...(passed
+        ? {}
+        : {
+            failureReason:
+              [record?.status, record?.message ?? body.message]
+                .filter(Boolean)
+                .join(": ") || undefined,
+          }),
     };
   }
 

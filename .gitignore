@@ -18,3 +18,16 @@ apps/*/.kwx-bucket/
 
 .walk/
 *.log
+
+# The Sandbox support ticket. Kept on disk because it is still being used,
+# ignored because this repository is public and it carries account detail —
+# the live API key's prefix, transaction ids, and the shape of the vendor
+# integration. None of it is a working secret, and none of it needs to be
+# indexed either. Remove this line if the repository ever goes private.
+docs/sandbox-okyc-support-ticket.md
+
+# TypeScript's incremental build cache. It records absolute paths and file
+# timestamps from whichever machine ran `tsc`, so a committed one is dirty
+# again the moment anybody typechecks — and it conflicts on every merge while
+# telling a reviewer nothing.
+*.tsbuildinfo

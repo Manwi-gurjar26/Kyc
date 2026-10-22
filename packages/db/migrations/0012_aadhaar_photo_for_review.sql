@@ -1,0 +1,35 @@
+-- ===================================================================
+-- Where the Aadhaar photograph lives, so a reviewer has something to
+-- compare a selfie against.
+-- ===================================================================
+--
+-- The gateway this system runs on sells no liveness check and no face match.
+-- There is no call that returns a score, so the comparison is done by a human
+-- or not at all — and a human needs both images on one screen.
+--
+-- The selfie is already handled: it goes through the ordinary document upload,
+-- gets virus-scanned, and lands in the bucket with a row in `documents`. The
+-- Aadhaar photograph was the missing half. It arrives in the OKYC verify
+-- response as base64 and was being discarded along with everything else in
+-- that payload we had no column for.
+--
+-- WHAT THIS COLUMN IS NOT: the photograph. It is a key into the object store,
+-- which is where every other raw vendor artefact goes — see
+-- `kyc_checks.raw_response_key`. A base64 JPEG in a row would be copied into
+-- every backup, every replica and every `SELECT *` a developer runs, and a
+-- biometric is the last thing that should travel that freely.
+--
+-- RETENTION IS NOT SETTLED BY THIS MIGRATION. Storing an Aadhaar photograph
+-- and a selfie means holding biometric data about a person, which is a
+-- different class of obligation from a name or four digits of a PAN. How long
+-- it may be kept, who may mint a URL for it, and what happens on a deletion
+-- request are decisions for whoever owns DPDP compliance here. The column is
+-- nullable and every reader must cope with its absence, so turning retention
+-- down later is a policy change rather than a migration.
+--
+-- Nullable, and permanently so: records written before today have no photo
+-- key, the fake gateway returns no photograph at all, and a person who has
+-- not finished the Aadhaar step has nothing to point at.
+-- -------------------------------------------------------------------
+
+ALTER TABLE "kyc_records" ADD COLUMN "aadhaar_photo_key" text;

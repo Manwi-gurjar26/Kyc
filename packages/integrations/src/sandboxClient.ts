@@ -26,9 +26,54 @@ const REQUEST_TIMEOUT_MS = 15_000;
 export interface SandboxClientOptions {
   apiKey: string;
   apiSecret: string;
-  /** Anything other than "production" talks to the test host. */
+  /**
+   * Guards the pairing rather than choosing the host. See `hostFor()`.
+   */
   nodeEnv: string;
   clock?: () => Date;
+}
+
+/**
+ * Picks the host from the key, not from NODE_ENV.
+ *
+ * It was NODE_ENV, on the reasoning that a test key in production should fail
+ * loudly rather than quietly verify nobody. The intent was right and the proxy
+ * was wrong: it assumes test keys only ever exist outside production, so a
+ * live key in development got sent to the test host — and this gateway's
+ * `/authenticate` accepts that pairing, returning a perfectly good token.
+ * Every product call then returned 403 "Use test API key for test
+ * environment", which reads as a broken Aadhaar integration rather than a
+ * mismatched host. That cost an afternoon.
+ *
+ * The key already states which environment it belongs to, so it chooses. The
+ * loud failure is kept as the explicit check below, where it says what is
+ * actually wrong.
+ */
+function hostFor(apiKey: string, nodeEnv: string): string {
+  const isLiveKey = apiKey.startsWith("key_live_");
+
+  if (nodeEnv === "production" && !isLiveKey) {
+    throw new Error(
+      "SandboxClient: a non-live API key is refused in production. " +
+        `The key begins "${apiKey.slice(0, 9)}", and a test key verifies nobody. ` +
+        "Use the live key and secret from the Sandbox dashboard.",
+    );
+  }
+
+  return isLiveKey ? LIVE_BASE : TEST_BASE;
+}
+
+/**
+ * Their transaction id, for the log and nothing else.
+ *
+ * It is the first thing their support asks for and the only handle that ties
+ * our log line to their record of the call — and it was being dropped on
+ * every error, so an hour of 503s left nothing to quote. Rendered only when
+ * present, because an id of "undefined" in an error message is worse than no
+ * id at all.
+ */
+function reference(body: { transaction_id?: string }): string {
+  return body.transaction_id ? ` [transaction_id: ${body.transaction_id}]` : "";
 }
 
 /** The shape every response from this gateway is wrapped in. */
@@ -78,7 +123,7 @@ export class SandboxClient {
 
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
-    this.base = options.nodeEnv === "production" ? LIVE_BASE : TEST_BASE;
+    this.base = hostFor(options.apiKey, options.nodeEnv);
     this.clock = options.clock ?? (() => new Date());
   }
 
@@ -151,9 +196,22 @@ export class SandboxClient {
      * "OTP expired" or "invalid PAN" — rewording it would lose the only
      * useful detail.
      */
+    /**
+     * Their message is kept on a 5xx too.
+     *
+     * It used to be dropped here, on the reasoning that a 5xx is ours to
+     * retry rather than anything the caller can act on. But this gateway
+     * answers with its envelope even when it fails, and that `message` is the
+     * only statement of what went wrong — so a verify call that came back 503
+     * was logged as "the verification gateway is unavailable (HTTP 503)" and
+     * there was nothing, anywhere, saying why. Still a VendorError and still
+     * retryable; it just says what they said.
+     */
     if (response.status >= 500) {
       throw new VendorError(
-        `The verification gateway is unavailable (HTTP ${response.status}).`,
+        `The verification gateway is unavailable (HTTP ${response.status})` +
+          (body.message ? `: ${body.message}` : "") +
+          reference(body),
         this.name,
         true,
       );
@@ -273,9 +331,19 @@ export function expiryOf(token: string): number | undefined {
 export function isoDate(value: string | undefined): string | undefined {
   if (!value) return undefined;
 
-  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value.trim());
+  /**
+   * Both separators, because this gateway uses both.
+   *
+   * OKYC returns "21-04-1985" and DigiLocker's user profile returns
+   * "26/05/2004" — confirmed against a real completed session, and not what
+   * their published example showed, which was an epoch in milliseconds.
+   * Accepting only hyphens silently returned undefined for every DigiLocker
+   * date of birth, and a missing date is how decideKyc decides somebody might
+   * be a minor.
+   */
+  const match = /^(\d{2})([-/])(\d{2})\2(\d{4})$/.exec(value.trim());
   if (!match) return undefined;
 
-  const [, day, month, year] = match;
+  const [, day, , month, year] = match;
   return `${year}-${month}-${day}`;
 }

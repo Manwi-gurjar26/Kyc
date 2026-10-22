@@ -75,6 +75,21 @@ export interface KycDecisionInput {
   aadhaar?: AadhaarResult;
   pan?: PanResult;
   selfie?: SelfieResult;
+  /**
+   * A selfie is held, scanned and on file, but nothing has scored it.
+   *
+   * Only meaningful when `selfie` is absent, and it exists because the two
+   * absences are different. A gateway that sells no liveness or face-match
+   * check still lets a selfie be collected and stored — so the file is there
+   * and no comparison has been made. Reporting that as SELFIE_MISSING sends
+   * a reviewer looking for something that is sitting in front of them.
+   *
+   * It never softens the outcome. A selfie nobody scored is not evidence of a
+   * face match, so this reviews exactly as a missing one does; it only changes
+   * what the reviewer is told. Filling in a `livenessPassed` instead would be
+   * the real danger: it would auto-approve an unexamined biometric.
+   */
+  selfieCollectedButNotScored?: boolean;
   gst?: GstResult;
   /**
    * KYB only, and only when the constitution calls for one.
@@ -273,7 +288,16 @@ export function decideKyc(
   /* ---- Selfie: liveness and face match ---- */
   if (needsSelfie) {
     if (!input.selfie) {
-      review("SELFIE_MISSING", "No selfie result was recorded for a FULL verification.");
+      if (input.selfieCollectedButNotScored) {
+        review(
+          "SELFIE_NOT_SCORED",
+          "A selfie was collected and scanned, but no liveness or face-match check has been run on it — " +
+            "the verification gateway in use does not offer one. Compare the selfie against the Aadhaar " +
+            "photograph by eye. Aadhaar photographs are often a decade old, so expect them to look dated.",
+        );
+      } else {
+        review("SELFIE_MISSING", "No selfie result was recorded for a FULL verification.");
+      }
     } else {
       if (!input.selfie.livenessPassed) {
         review(

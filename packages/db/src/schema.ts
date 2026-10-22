@@ -267,6 +267,37 @@ export const kycRecords = pgTable(
     aadhaarLast4: text("aadhaar_last4"),
     aadhaarRefToken: text("aadhaar_ref_token"),
 
+    /**
+     * The name and date of birth UIDAI returned, held for one purpose: the
+     * Income Tax Department's PAN check needs a name and a date to match
+     * against, and both have to come from Aadhaar.
+     *
+     * Sending the name the person typed instead would make the match
+     * meaningless — it is a name they can read off the card in front of them.
+     * So these two columns exist because `nameMatch` is only evidence if we
+     * did not let the subject choose the input.
+     *
+     * The date earns its place twice. `decideKyc()` fails a minor outright,
+     * and without the date stored that decision cannot be re-derived at
+     * review time — which the rest of this table goes to some trouble to make
+     * possible.
+     *
+     * Still no Aadhaar number, here or anywhere.
+     */
+    aadhaarName: text("aadhaar_name"),
+    /** ISO date, YYYY-MM-DD. */
+    aadhaarDob: text("aadhaar_dob"),
+    /**
+     * Object-store key for the UIDAI photograph. Never the image itself.
+     *
+     * A reviewer compares this against the uploaded selfie by eye, because
+     * the gateway offers no face match to do it for them. The bytes live in
+     * the bucket with every other raw vendor artefact; a base64 JPEG in a row
+     * would ride along in every backup, replica and `SELECT *`, which is no
+     * way to treat a biometric.
+     */
+    aadhaarPhotoKey: text("aadhaar_photo_key"),
+
     /** Envelope ciphertext. Decrypted only by roles that need it. */
     panEncrypted: text("pan_encrypted"),
     panLast4: text("pan_last4"),

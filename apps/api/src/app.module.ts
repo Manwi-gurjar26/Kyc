@@ -8,6 +8,7 @@ import {
   ReplayGuard,
   SandboxClient,
   SandboxKybProvider,
+  SandboxDigiLockerProvider,
   SandboxKycProvider,
   SignedUrlFileStore,
   type DocumentExtractor,
@@ -82,7 +83,14 @@ export interface AppModuleOptions {
  * fake.
  */
 function buildSandboxClient(config: AppConfig): SandboxClient | null {
-  if (config.KYC_PROVIDER !== "sandbox") return null;
+  /**
+   * Built for both Sandbox routes. DigiLocker is the same vendor on the same
+   * key — only the Aadhaar flow differs — so it shares the access token with
+   * the KYB adapter exactly as OKYC did.
+   */
+  if (config.KYC_PROVIDER !== "sandbox" && config.KYC_PROVIDER !== "digilocker") {
+    return null;
+  }
 
   return new SandboxClient({
     apiKey: config.KYC_VENDOR_CLIENT_ID!,
@@ -99,6 +107,12 @@ function buildKycProvider(
     case "fake":
       return new FakeKycProvider({
         webhookSecret: config.KYC_WEBHOOK_SECRET,
+        /**
+         * Development only: which Aadhaar journey the fake pretends to be.
+         * Lets the hosted screens be walked without the gateway. Defaults to
+         * OTP, which is what every existing test expects.
+         */
+        aadhaarRoute: process.env.FAKE_AADHAAR_ROUTE === "HOSTED" ? "HOSTED" : "OTP",
       });
 
     /*
@@ -126,6 +140,28 @@ function buildKycProvider(
         nodeEnv: config.NODE_ENV,
         webhookSecret: config.KYC_WEBHOOK_SECRET,
         client: client ?? undefined,
+      });
+
+    /**
+     * The replacement Aadhaar route.
+     *
+     * A hosted flow: the person authenticates at DigiLocker, on the
+     * government's own site, and the Aadhaar number never reaches us. See
+     * docs/superpowers/specs/2026-10-21-digilocker-migration-design.md.
+     */
+    case "digilocker":
+      if (!client) {
+        throw new Error(
+          "KYC_PROVIDER=digilocker selected but no Sandbox client was built. " +
+            "This is a wiring mistake in app.module, not a configuration one.",
+        );
+      }
+      return new SandboxDigiLockerProvider({
+        apiKey: config.KYC_VENDOR_CLIENT_ID!,
+        apiSecret: config.KYC_VENDOR_CLIENT_SECRET!,
+        nodeEnv: config.NODE_ENV,
+        webhookSecret: config.KYC_WEBHOOK_SECRET,
+        client,
       });
 
     case "cashfree":
@@ -198,7 +234,15 @@ function buildKybProvider(
    * this adapter. That is also why the client is passed in rather than built:
    * one token serves both.
    */
-  if (config.KYC_PROVIDER === "sandbox") {
+  /**
+   * Both Sandbox routes use the same KYB adapter.
+   *
+   * DigiLocker covers Aadhaar and nothing else — PAN and GSTIN are still the
+   * ordinary Sandbox endpoints, on the same key, and neither is deprecated.
+   * Leaving digilocker out here would have thrown at boot with a message
+   * about an unimplemented KYB vendor, which is not what is wrong.
+   */
+  if (config.KYC_PROVIDER === "sandbox" || config.KYC_PROVIDER === "digilocker") {
     if (!client) {
       throw new Error(
         "KYC_PROVIDER=sandbox selected but no Sandbox client was built. " +

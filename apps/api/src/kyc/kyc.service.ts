@@ -1,13 +1,21 @@
+import { randomUUID } from "node:crypto";
 import {
   can,
+  canTransition,
+  decideKyc,
+  panBlindIndex,
   type KycAction,
+  type KycLevel,
   type KycStatus,
   type KycThresholds,
+  type PanResult,
   type SubjectKycState,
 } from "@kilowattx/core";
 import {
+  applyKycDecision,
   consentRecords,
   aadhaarOtpChallenges,
+  documents,
   kycRecords,
   orgMembers,
   organisations,
@@ -17,14 +25,18 @@ import {
   type Database,
 } from "@kilowattx/db";
 import {
+  KYC_DOCS_PREFIX,
+  LocalDiskBucket,
   ReplayGuard,
   verifyWebhook,
+  type KybProvider,
+  type AadhaarRoute,
   type KycProvider,
   type VendorKycResult,
   VendorRequestError,
 } from "@kilowattx/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { ConsentInput, CreateKycSessionInput } from "@kilowattx/validation";
 import {
   applyVendorResult,
@@ -58,6 +70,14 @@ export interface KycStatusView {
   reasonCodes: string[];
   remainingSteps: string[];
   verifiedAt: Date | null;
+  /**
+   * How this deployment collects an Aadhaar, so the client knows which screen
+   * to render: a number and an OTP box, or a button to a government site.
+   *
+   * Not a secret — it is plain from the page either way — and not the vendor's
+   * name, which the health endpoint deliberately withholds.
+   */
+  aadhaarRoute: AadhaarRoute;
 }
 
 /**
@@ -96,6 +116,17 @@ export class KycService {
     @Inject(DI.REPLAY_GUARD) private readonly replayGuard: ReplayGuard,
     @Inject(DI.CLOCK) private readonly clock: Clock,
     @Inject(DI.PAN_ENCRYPTOR) private readonly panEncryptor: PanEncryptor,
+    /**
+     * The PAN check lives on the KYB adapter because the Income Tax
+     * Department's route is the same one for a person and a company. It is
+     * selected by KYC_PROVIDER, so there is no way to run a real KYC gateway
+     * against a fake PAN check.
+     */
+    @Inject(DI.KYB_PROVIDER) private readonly kyb: KybProvider,
+    /**
+     * Where the UIDAI photograph goes. The row holds a key, never the image.
+     */
+    @Inject(DI.FILE_BUCKET) private readonly bucket: LocalDiskBucket,
   ) {}
 
   /* ---------------------------------------------------------------- */
@@ -240,8 +271,12 @@ export class KycService {
     idempotencyKey: string,
   ): Promise<{
     kycRecordId: string;
+    /**
+     * Absent for a gateway whose hosted URL is its own credential, which
+     * DigiLocker's is — there is no second token to hand the browser.
+     */
+    clientToken?: string;
     vendorSessionId: string;
-    clientToken: string;
     expiresAt: Date;
     hostedUrl?: string;
   }> {
@@ -458,6 +493,35 @@ export class KycService {
     try {
       result = await this.provider.verifyAadhaarOtp(challenge.referenceId, otp);
     } catch (error) {
+      /**
+       * An outage must not spend one of the three tries.
+       *
+       * `claimChallenge` counts the attempt before the call, which is right:
+       * a wrong OTP that threw on the way out would otherwise never be
+       * counted and the limit would be unenforceable. But it counts every
+       * failure the same way, including the ones where the gateway never
+       * looked at the OTP at all.
+       *
+       * That is not hypothetical. The gateway answered 503 "Source
+       * Unavailable" — UIDAI being unreachable on their side — and that
+       * still burned a try. Three of those and somebody is locked out of a
+       * challenge whose OTP was never once checked, told to request a new
+       * one, and met by the same outage on the next three. The guess has to
+       * be adjudicated to be counted.
+       *
+       * A VendorRequestError IS adjudication: the gateway looked and refused
+       * the input. Anything else — 5xx, a timeout, a refused connection —
+       * is refunded.
+       */
+      if (!(error instanceof VendorRequestError)) {
+        await this.refundAttempt(userId);
+        throw this.vendorFailure(
+          error,
+          "The verification service is temporarily unavailable. " +
+            "Your OTP has not been used up, so the same one will still work.",
+        );
+      }
+
       throw this.vendorFailure(error, "We could not check that OTP just now.");
     }
 
@@ -466,16 +530,39 @@ export class KycService {
      * check, not a passed one. Treating a non-SUCCESS status as success is the
      * single worst bug available here, so it is refused explicitly rather than
      * left to fall through into a stored reference token.
+     *
+     * What it must not do is blame the number. This said "please check the
+     * number and try again", which is wrong twice over: the twelve digits
+     * already passed a Verhoeff check here, and the gateway itself accepted
+     * them one call earlier when it sent the OTP. By far the likeliest causes
+     * are a mistyped OTP or a reference id that has expired, and the gateway
+     * says which — so its reason is logged and the person is pointed at the
+     * OTP, with a fresh one being the fix.
      */
     if (result.status !== "SUCCESS") {
+      this.logger.warn(
+        `Aadhaar OTP check returned a failure${
+          result.failureReason ? `: ${result.failureReason}` : " with no stated reason"
+        }`,
+      );
+
       throw ApiError.badRequest(
         "AADHAAR_CHECK_FAILED",
-        "That Aadhaar could not be confirmed. Please check the number and try again.",
+        "That OTP could not be confirmed. It may be mistyped or expired — " +
+          "please request a new one and try again.",
       );
     }
 
+    /**
+     * The name and date are recorded here, not handed to the browser and
+     * forgotten. They are what the PAN check matches against, and they have
+     * to come from UIDAI rather than from a form the subject fills in.
+     */
     const stored = await this.rememberAadhaar(userId, {
       refToken: result.refToken,
+      name: result.nameOnRecord,
+      dob: result.dateOfBirth,
+      photoKey: await this.storeAadhaarPhoto(userId, result.photo),
     });
 
     /**
@@ -567,11 +654,508 @@ export class KycService {
         );
   }
 
+  /* ------------------------------------------------------------------ */
+  /* PAN                                                                */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Verifies a PAN against the Income Tax Department.
+   *
+   * The Department does not tell us the name on a PAN. It takes a name from us
+   * and answers whether it matched, so the entire value of `nameMatch` rests
+   * on where that name came from. It comes from `aadhaar_name` — what UIDAI
+   * returned — and never from this request. A name the subject supplies is a
+   * name they can read off the card in front of them, and matching it would
+   * catch a typo and nothing else.
+   *
+   * That is why Aadhaar has to be done first, and why this refuses rather than
+   * falling back to the display name. A weaker check that looks like the real
+   * one is worse than a missing one.
+   *
+   * Like the Aadhaar step, the record stays IN_PROGRESS. `decideKyc()` is the
+   * only thing that sets a status.
+   */
+  async verifyPan(
+    userId: string,
+    pan: string,
+  ): Promise<{
+    last4: string;
+    status: PanResult["status"];
+    nameMatch: boolean;
+    dobMatch: boolean;
+    linkedToAadhaar: boolean;
+  }> {
+    if (!(await this.hasLiveConsent(userId, "KYC_VERIFICATION"))) {
+      throw ApiError.forbidden(
+        "CONSENT_REQUIRED",
+        "We need your agreement before sending your PAN to the Income Tax Department.",
+      );
+    }
+
+    const identity = await this.verifiedIdentity(userId);
+
+    if (!identity) {
+      throw ApiError.badRequest(
+        "AADHAAR_REQUIRED_FIRST",
+        "Please confirm your Aadhaar first. The name on your PAN is checked " +
+          "against the name on your Aadhaar, so we need that before we can check your PAN.",
+      );
+    }
+
+    /**
+     * Computed before the Department is called, because it is also the
+     * duplicate check — and a PAN already registered to somebody else is a
+     * refusal we can make for free, without a paid call.
+     */
+    const blindIndex = panBlindIndex(pan, this.blindIndexKey());
+
+    if (await this.panBelongsToAnother(userId, blindIndex)) {
+      throw ApiError.badRequest(
+        "PAN_ALREADY_USED",
+        "That PAN is already registered to another account. " +
+          "If you believe this is a mistake, please contact support.",
+      );
+    }
+
+    let result: PanResult;
+    try {
+      result = await this.kyb.verifyPan({
+        pan,
+        /** From UIDAI. Not from the request, and not the display name. */
+        name: identity.name,
+        dateOfBirth: identity.dob,
+      });
+    } catch (error) {
+      throw this.panFailure(error);
+    }
+
+    await this.rememberPan(userId, { pan, blindIndex });
+
+    /**
+     * Decided here, with the result still in hand.
+     *
+     * This is the last step a person can currently complete, and it is the
+     * only moment the PAN findings exist anywhere: `rememberPan` stores
+     * ciphertext, four digits and a blind index, and nothing about whether
+     * the Department matched the name. A decision endpoint called later would
+     * have to rebuild `nameMatch` from the kyc_checks rows, which means two
+     * sources of truth for one answer.
+     */
+    await this.decideFromSteps(userId, result);
+
+    return {
+      last4: pan.slice(-4),
+      status: result.status,
+      nameMatch: result.nameMatch,
+      dobMatch: result.dobMatch,
+      linkedToAadhaar: result.linkedToAadhaar,
+    };
+  }
+
+  /**
+   * Runs `decideKyc()` over what the step-by-step flow has recorded.
+   *
+   * The gap this closes: nothing in this flow ever decided anything. A person
+   * who confirmed their Aadhaar and verified their PAN stayed IN_PROGRESS for
+   * good — not reviewable, not rejected, not visible in the review queue, and
+   * carrying a status that was simply untrue. `decideKyc()` was only ever
+   * reached by the webhook path, which the OTP flow does not use.
+   *
+   * It is deliberately NOT a "submit" the person triggers. The decision is
+   * ours to make from evidence we hold, and an explicit submit would invite a
+   * client to decide when it had collected enough.
+   *
+   * For a FULL verification this produces MANUAL_REVIEW rather than VERIFIED,
+   * because there is no selfie step yet and `decideKyc()` sends a FULL
+   * verification with no selfie to a human. That is the right answer and not
+   * a limitation to route around: the case now reaches a reviewer with a
+   * reason attached instead of sitting still.
+   */
+  private async decideFromSteps(userId: string, pan: PanResult): Promise<void> {
+    const thresholds = await this.thresholds();
+    const now = this.clock();
+
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({
+          id: kycRecords.id,
+          level: kycRecords.level,
+          status: kycRecords.status,
+          refToken: kycRecords.aadhaarRefToken,
+          name: kycRecords.aadhaarName,
+          dob: kycRecords.aadhaarDob,
+        })
+        .from(kycRecords)
+        .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+
+    const record = rows[0];
+    if (!record) return;
+
+    /**
+     * The reference token is what says the OTP was actually confirmed.
+     *
+     * Not the last four digits, which are written when the OTP is merely
+     * requested — treating those as proof would report an Aadhaar success for
+     * somebody who never typed the code.
+     */
+    const aadhaar = record.refToken
+      ? {
+          status: "SUCCESS" as const,
+          nameOnRecord: record.name ?? undefined,
+          dateOfBirth: record.dob ?? undefined,
+        }
+      : undefined;
+
+    const decision = decideKyc(
+      {
+        level: record.level as KycLevel,
+        now,
+        aadhaar,
+        pan,
+        /**
+         * Always undefined, and that is not an oversight.
+         *
+         * A SelfieResult carries `livenessPassed` and a face-match score, and
+         * this gateway sells neither — there is no call that would produce
+         * them. Supplying a made-up pair here would auto-approve a biometric
+         * nobody examined, which is the same failure the fake virus scanner
+         * is refused in production for.
+         */
+        selfie: undefined,
+        /**
+         * What we can say truthfully: a selfie is on file and unscored. It
+         * reviews either way; this only changes what the reviewer is told.
+         */
+        selfieCollectedButNotScored: await this.hasCleanSelfie(userId),
+        /**
+         * False by construction: `verifyPan` refuses a PAN held by another
+         * subject before the Department is ever called, so a duplicate
+         * cannot reach this point.
+         */
+        duplicatePan: false,
+      },
+      thresholds,
+    );
+
+    /**
+     * Asked before writing, rather than discovered by throwing.
+     *
+     * `applyKycDecision` throws on an illegal move, which is correct of it —
+     * but two legitimate requests reach here with nothing legal to do, and
+     * neither deserves a 500:
+     *
+     *   - a re-submitted PAN re-decides to the status already held, and
+     *     `canTransition` treats from === to as illegal;
+     *   - a record already VERIFIED or REJECTED cannot be moved by this flow
+     *     at all, and must not be. Re-KYC starts a new record; reopening a
+     *     cleared subject is a deliberate, logged action and not a side
+     *     effect of somebody typing their PAN again.
+     *
+     * So the move is checked first and skipped quietly. Nothing is written,
+     * which is also the honest audit outcome: there was no new decision.
+     */
+    if (!canTransition(record.status as KycStatus, decision.status)) return;
+
+    await withContext(this.db, { role: "system" }, (tx) =>
+      applyKycDecision(tx, {
+        kycRecordId: record.id,
+        decision,
+        thresholds,
+        now,
+        /** One row per check this flow actually performed. */
+        checks: [
+          ...(aadhaar
+            ? [
+                {
+                  checkType: "AADHAAR" as const,
+                  status: "PASSED" as const,
+                  detail: "OTP confirmed with the gateway.",
+                },
+              ]
+            : []),
+          {
+            checkType: "PAN" as const,
+            status:
+              pan.status === "VALID" && pan.nameMatch
+                ? ("PASSED" as const)
+                : ("FAILED" as const),
+            detail: `Income Tax Department reported ${pan.status}; name match ${
+              pan.nameMatch ? "yes" : "no"
+            }, date of birth match ${pan.dobMatch ? "yes" : "no"}.`,
+          },
+        ],
+        actorType: "SYSTEM",
+      }),
+    );
+  }
+
+  /**
+   * Puts the UIDAI photograph in the object store and returns its key.
+   *
+   * In the bucket rather than a column, like every other raw vendor artefact.
+   * A base64 JPEG on `kyc_records` would be copied into each backup, each
+   * replica and every `SELECT *` somebody runs while debugging, and a
+   * biometric should not travel that freely.
+   *
+   * Undefined in, undefined out: the fake gateway returns no photograph, and
+   * a missing one is normal rather than an error.
+   *
+   * A failure here must not fail the verification. The OTP was confirmed, the
+   * reference token is the thing that proves it, and losing the photograph
+   * costs a reviewer a side-by-side comparison — which is a worse review, not
+   * a wrong one. Throwing instead would discard a successful check and bill
+   * the person a second gateway call to recover it.
+   */
+  private async storeAadhaarPhoto(
+    userId: string,
+    photo: string | undefined,
+  ): Promise<string | undefined> {
+    if (!photo) return undefined;
+
+    try {
+      /** Accepts a bare base64 payload as well as the data URL they send. */
+      const base64 = photo.replace(/^data:image\/[a-z]+;base64,/i, "");
+      const bytes = Buffer.from(base64, "base64");
+
+      if (bytes.length === 0) return undefined;
+
+      const key = `${KYC_DOCS_PREFIX}${userId}/AADHAAR_PHOTO/${randomUUID()}.jpg`;
+      await this.bucket.put(key, bytes, "image/jpeg");
+      return key;
+    } catch (error) {
+      this.logger.error(
+        "Could not store the Aadhaar photograph; the verification itself stands",
+        error instanceof Error ? error.stack : String(error),
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * The record a step should be writing to: this person's most recent.
+   *
+   * Every opened session creates one, so "the record for this user" is not a
+   * single row once somebody has retried. Picking the newest consistently is
+   * what keeps the steps, the decision and the status page talking about the
+   * same attempt.
+   */
+  private async currentRecordId(userId: string): Promise<string | undefined> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ id: kycRecords.id })
+        .from(kycRecords)
+        .where(eq(kycRecords.userId, userId))
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+    return rows[0]?.id;
+  }
+
+  /**
+   * Whether a selfie is on file and safe to look at.
+   *
+   * CLEAN specifically, not merely uploaded. A quarantined or unscanned file
+   * is not evidence a reviewer can act on — and `ScanResult` keeps ERRORED
+   * separate from CLEAN for exactly this reason: a scanner that could not be
+   * reached has found nothing, which is not the same as having found nothing
+   * wrong. Either way the reviewer would be told a selfie is waiting for them
+   * when there is nothing they may safely open.
+   */
+  private async hasCleanSelfie(userId: string): Promise<boolean> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.ownerUserId, userId),
+            eq(documents.docType, "SELFIE"),
+            eq(documents.scanStatus, "CLEAN"),
+          ),
+        )
+        .limit(1),
+    );
+
+    return rows.length > 0;
+  }
+
+  /**
+   * The UIDAI-verified name and date, or null when Aadhaar is not done.
+   *
+   * Both or neither: a name without a date cannot be sent to the Department,
+   * which matches them together, so a half-filled record is treated as no
+   * record rather than as something to work around.
+   */
+  private async verifiedIdentity(
+    userId: string,
+  ): Promise<{ name: string; dob: string } | null> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ name: kycRecords.aadhaarName, dob: kycRecords.aadhaarDob })
+        .from(kycRecords)
+        .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+
+    const row = rows[0];
+    if (!row?.name || !row.dob) return null;
+    return { name: row.name, dob: row.dob };
+  }
+
+  /**
+   * Whether this PAN is already on somebody else's record.
+   *
+   * The unique index on `pan_blind_index` is the real enforcement, and it
+   * stays the thing that cannot be raced past. This check exists so the
+   * ordinary case — a person mistyping a PAN that belongs to someone else —
+   * reads as a refusal rather than as a constraint violation surfacing as a
+   * 500, and so we do not pay for a vendor call to learn it.
+   *
+   * Scoped to OTHER records: re-submitting your own PAN is a retry, not a
+   * duplicate.
+   */
+  private async panBelongsToAnother(
+    userId: string,
+    blindIndex: string,
+  ): Promise<boolean> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ userId: kycRecords.userId })
+        .from(kycRecords)
+        .where(eq(kycRecords.panBlindIndex, blindIndex))
+        .limit(1),
+    );
+
+    const owner = rows[0];
+    return owner !== undefined && owner.userId !== userId;
+  }
+
+  /**
+   * Stores the PAN: ciphertext, last four, and the blind index.
+   *
+   * The full PAN goes in encrypted and nowhere else — not in a log line, not
+   * in the response, and not in the error when the Department rejects it.
+   */
+  private async rememberPan(
+    userId: string,
+    fields: { pan: string; blindIndex: string },
+  ): Promise<void> {
+    const now = this.clock();
+    const encrypted = await this.panEncryptor.encrypt(fields.pan);
+
+    /**
+     * Deliberately does not touch `status`.
+     *
+     * It used to set IN_PROGRESS here, copying the Aadhaar step, and that was
+     * wrong in a way the no-op guard in `decideFromSteps` exposed: the PAN
+     * step runs after a decision may already exist, so re-submitting a PAN
+     * reset MANUAL_REVIEW back to IN_PROGRESS and the decision was then
+     * written a second time.
+     *
+     * The real damage was wider than a duplicate row. This is a bare UPDATE,
+     * so it moved the status without consulting `canTransition` — meaning a
+     * VERIFIED or REJECTED record could be quietly dragged back to
+     * IN_PROGRESS by submitting a PAN again, which is precisely the kind of
+     * transition the status machine exists to forbid.
+     *
+     * Only the decision point sets status now, through `applyKycDecision`,
+     * which locks the row and validates the move. The Aadhaar step may still
+     * set IN_PROGRESS because it is the first step and the record is
+     * NOT_STARTED when it runs.
+     */
+    /**
+     * One record, the newest — not every record this person has.
+     *
+     * `where(userId)` updated all of them, and somebody who started the flow
+     * more than once has several. With a unique index on `pan_blind_index`
+     * that is not a tidiness problem: writing the same index to a second row
+     * violates the constraint and the whole PAN step fails for anybody who
+     * ever retried.
+     */
+    const target = await this.currentRecordId(userId);
+    if (!target) return;
+
+    await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .update(kycRecords)
+        .set({
+          panEncrypted: encrypted,
+          panLast4: fields.pan.slice(-4),
+          panBlindIndex: fields.blindIndex,
+          updatedAt: now,
+        })
+        .where(eq(kycRecords.id, target)),
+    );
+  }
+
+  /**
+   * Turns a PAN vendor exception into something a customer can read.
+   *
+   * Separate from `vendorFailure` only so the codes say PAN rather than
+   * AADHAAR — a support agent reading AADHAAR_CHECK_FAILED on a PAN step
+   * would go looking in the wrong place.
+   */
+  private panFailure(error: unknown): ApiError {
+    if (error instanceof VendorRequestError) {
+      return ApiError.badRequest("PAN_CHECK_FAILED", error.message);
+    }
+    this.logger.error(
+      "PAN gateway call failed",
+      error instanceof Error ? error.stack : String(error),
+    );
+    return ApiError.badRequest(
+      "PAN_UNAVAILABLE",
+      "We could not check that PAN just now. Please try again shortly.",
+    );
+  }
+
   /** Removes a challenge, in a transaction of its own so it commits. */
   private async dropChallenge(userId: string): Promise<void> {
     await withContext(this.db, { role: "system" }, (tx) =>
       tx.delete(aadhaarOtpChallenges).where(eq(aadhaarOtpChallenges.userId, userId)),
     );
+  }
+
+  /**
+   * Gives back the attempt `claimChallenge` took, after a call the gateway
+   * never adjudicated.
+   *
+   * Guarded on `attempts > 0` rather than trusting the number just read: the
+   * refund runs outside the transaction that counted, so a second request for
+   * the same person could have moved it in between. A guarded decrement
+   * cannot drive the counter negative, and a negative counter would hand out
+   * unlimited guesses — the one outcome worse than spending a try on an
+   * outage.
+   *
+   * Failing to refund must not replace the vendor error with a database one.
+   * The person is already being told to try again; losing one try is a far
+   * smaller problem than swallowing the reason their verification failed.
+   */
+  private async refundAttempt(userId: string): Promise<void> {
+    try {
+      await withContext(this.db, { role: "system" }, (tx) =>
+        tx
+          .update(aadhaarOtpChallenges)
+          .set({ attempts: sql`${aadhaarOtpChallenges.attempts} - 1` })
+          .where(
+            and(
+              eq(aadhaarOtpChallenges.userId, userId),
+              gt(aadhaarOtpChallenges.attempts, 0),
+            ),
+          ),
+      );
+    } catch (error) {
+      this.logger.error(
+        "Could not refund an Aadhaar OTP attempt after a gateway failure",
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   /**
@@ -585,26 +1169,45 @@ export class KycService {
    */
   private async rememberAadhaar(
     userId: string,
-    fields: { last4?: string; refToken?: string },
+    fields: {
+      last4?: string;
+      refToken?: string;
+      /** UIDAI's name, kept so the PAN check has something real to match. */
+      name?: string;
+      /** ISO date. */
+      dob?: string;
+      /** Object-store key for the UIDAI photograph, never the image. */
+      photoKey?: string;
+    },
   ): Promise<{ last4: string | null }> {
     const now = this.clock();
+
+    /**
+     * Built once and shared by the update and the insert, so a field cannot
+     * be added to one path and forgotten on the other — which is a bug that
+     * only shows up for whoever happens to have no record yet.
+     */
+    const offered = {
+      ...(fields.last4 ? { aadhaarLast4: fields.last4 } : {}),
+      ...(fields.refToken ? { aadhaarRefToken: fields.refToken } : {}),
+      ...(fields.name ? { aadhaarName: fields.name } : {}),
+      ...(fields.dob ? { aadhaarDob: fields.dob } : {}),
+      ...(fields.photoKey ? { aadhaarPhotoKey: fields.photoKey } : {}),
+    };
 
     return withContext(this.db, { role: "system" }, async (tx) => {
       const existing = await tx
         .select({ id: kycRecords.id, aadhaarLast4: kycRecords.aadhaarLast4 })
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1);
 
       if (existing[0]) {
         await tx
           .update(kycRecords)
-          .set({
-            ...(fields.last4 ? { aadhaarLast4: fields.last4 } : {}),
-            ...(fields.refToken ? { aadhaarRefToken: fields.refToken } : {}),
-            status: "IN_PROGRESS",
-            updatedAt: now,
-          })
+          .set({ ...offered, status: "IN_PROGRESS", updatedAt: now })
           .where(eq(kycRecords.id, existing[0].id));
 
         return { last4: fields.last4 ?? existing[0].aadhaarLast4 };
@@ -615,8 +1218,7 @@ export class KycService {
         subjectType: "PERSON",
         level: "FULL",
         status: "IN_PROGRESS",
-        ...(fields.last4 ? { aadhaarLast4: fields.last4 } : {}),
-        ...(fields.refToken ? { aadhaarRefToken: fields.refToken } : {}),
+        ...offered,
         createdAt: now,
         updatedAt: now,
       });
@@ -650,7 +1252,16 @@ export class KycService {
         .select()
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
-        .orderBy(kycRecords.createdAt)
+        /**
+         * Newest first, and this was ascending.
+         *
+         * Every opened session creates a record, so somebody who started the
+         * flow more than once has several — and this returned the oldest,
+         * which is the attempt they abandoned. A person who had just
+         * completed a DigiLocker verification was shown the state of their
+         * first try: IN_PROGRESS, Aadhaar still outstanding, no way forward.
+         */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1),
     );
 
@@ -663,6 +1274,7 @@ export class KycService {
         panLast4: null,
         reasonCodes: [],
         remainingSteps: ["CONSENT", "AADHAAR", "PAN", "SELFIE"],
+        aadhaarRoute: this.provider.aadhaarRoute,
         verifiedAt: null,
       };
     }
@@ -673,22 +1285,58 @@ export class KycService {
       aadhaarLast4: record.aadhaarLast4,
       panLast4: record.panLast4,
       reasonCodes: (record.decisionReasons ?? []).map((r) => r.code),
-      remainingSteps: this.remainingSteps(record),
+      remainingSteps: this.remainingSteps(record, await this.hasCleanSelfie(userId)),
       verifiedAt: record.verifiedAt,
+      aadhaarRoute: this.provider.aadhaarRoute,
     };
   }
 
-  private remainingSteps(record: {
-    aadhaarLast4: string | null;
-    panLast4: string | null;
-    livenessPassed: boolean | null;
-    status: string;
-  }): string[] {
+  private remainingSteps(
+    record: {
+      aadhaarLast4: string | null;
+      aadhaarRefToken: string | null;
+      panLast4: string | null;
+      livenessPassed: boolean | null;
+      status: string;
+    },
+    /** A scanned, CLEAN selfie document exists for this subject. */
+    hasCleanSelfie: boolean,
+  ): string[] {
     if (record.status === "VERIFIED") return [];
     const steps: string[] = [];
-    if (!record.aadhaarLast4) steps.push("AADHAAR");
+    /**
+     * Done when the gateway gave us a reference token, not when four digits
+     * were written.
+     *
+     * It asked for `aadhaar_last4`, which OKYC wrote when an OTP was merely
+     * requested — so a person who asked for a code and never typed it looked
+     * finished. DigiLocker made the same line wrong in the opposite
+     * direction: it shares a name and a date of birth and never a number at
+     * all, so a completed verification left `aadhaar_last4` null and the step
+     * stayed outstanding for ever.
+     *
+     * The reference token is the thing that only exists once a gateway has
+     * actually confirmed somebody, which is what `decideFromSteps` has always
+     * used.
+     */
+    if (!record.aadhaarRefToken) steps.push("AADHAAR");
     if (!record.panLast4) steps.push("PAN");
-    if (record.livenessPassed !== true) steps.push("SELFIE");
+
+    /**
+     * Done when a clean selfie is on file, or when liveness actually passed.
+     *
+     * It asked only the second question, and nothing sets `livenessPassed` —
+     * no gateway this system can reach sells a liveness check. So somebody
+     * who had uploaded a selfie was told the selfie step was still
+     * outstanding, for ever, and the only reasonable thing to do with that
+     * screen is take another photograph.
+     *
+     * Both halves are kept: the file is what there is today, and a real
+     * liveness result is what there will be if a vendor is ever added, which
+     * should clear the step without this line changing again.
+     */
+    if (record.livenessPassed !== true && !hasCleanSelfie) steps.push("SELFIE");
+
     return steps;
   }
 
@@ -776,7 +1424,7 @@ export class KycService {
     options: { orgId?: string } = {},
   ): Promise<SubjectKycState> {
     const rows = await withContext(this.db, { role: "system" }, (tx) =>
-      tx.select().from(kycRecords).where(eq(kycRecords.userId, userId)).limit(1),
+      tx.select().from(kycRecords).where(eq(kycRecords.userId, userId)).orderBy(desc(kycRecords.createdAt)).limit(1),
     );
     const record = rows[0];
 
@@ -919,6 +1567,111 @@ export class KycService {
     const status = await this.decideAndApply(result);
 
     return { handled: true, status };
+  }
+
+  /**
+   * Collects the outcome of a hosted session, after the person comes back.
+   *
+   * The browser's return is a notification that something happened, never a
+   * report of what. This asks the gateway itself — the same rule the webhook
+   * path follows, and the reason a webhook body is not believed either.
+   *
+   * It exists because DigiLocker has no webhook: the person returning to our
+   * page is the only signal there is. See
+   * docs/superpowers/specs/2026-10-21-digilocker-migration-design.md.
+   */
+  async collectSession(
+    userId: string,
+    vendorSessionId?: string,
+  ): Promise<{ status: KycStatus; reasonCodes: string[] }> {
+    /**
+     * The session id is optional, because the gateway does not always give it
+     * back.
+     *
+     * DigiLocker returns the person to our redirect URL with its own
+     * parameters, and none of them is the session we opened — so a page that
+     * required one showed "nothing to finish" to somebody who had just
+     * completed a verification. The browser never needed to carry it: this
+     * person opened the session, so the server already knows which it was.
+     *
+     * When an id IS supplied it is still honoured and still checked against
+     * the caller's own record, because that is the case where it arrives
+     * through a browser and is therefore a claim rather than a fact.
+     */
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({
+          id: kycRecords.id,
+          status: kycRecords.status,
+          userId: kycRecords.userId,
+          reasons: kycRecords.decisionReasons,
+          vendorSessionId: kycRecords.vendorSessionId,
+        })
+        .from(kycRecords)
+        .where(
+          vendorSessionId
+            ? eq(kycRecords.vendorSessionId, vendorSessionId)
+            : eq(kycRecords.userId, userId),
+        )
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+
+    const record = rows[0];
+
+    /**
+     * Scoped to the caller, and 404 rather than 403 for somebody else's
+     * session.
+     *
+     * The id arrives through the browser, so it is a claim rather than a
+     * credential — collecting another person's session would write their
+     * verification onto your record. Answering "forbidden" would also confirm
+     * the session exists, which is a question a stranger has no business
+     * getting an answer to.
+     */
+    if (!record || record.userId !== userId || !record.vendorSessionId) {
+      throw ApiError.notFound(
+        "SESSION_NOT_FOUND",
+        "There is no verification session to finish.",
+      );
+    }
+
+    /**
+     * Already decided, so say so without asking the gateway again.
+     *
+     * Somebody reloading the return page out of impatience must not re-apply
+     * a decision: `applyKycDecision` refuses a transition to the status
+     * already held and would turn a 201 into a 500. It also saves a paid
+     * vendor call for an answer we have written down.
+     */
+    if (record.status !== "NOT_STARTED" && record.status !== "IN_PROGRESS") {
+      return {
+        status: record.status as KycStatus,
+        reasonCodes: (record.reasons ?? []).map((r) => r.code),
+      };
+    }
+
+    let result: VendorKycResult;
+    try {
+      result = await this.provider.fetchResult(record.vendorSessionId);
+    } catch (error) {
+      throw this.vendorFailure(error, "We could not check that verification just now.");
+    }
+
+    const status = await this.decideAndApply(result);
+
+    const after = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ reasons: kycRecords.decisionReasons })
+        .from(kycRecords)
+        .where(eq(kycRecords.id, record.id))
+        .limit(1),
+    );
+
+    return {
+      status,
+      reasonCodes: (after[0]?.reasons ?? []).map((r) => r.code),
+    };
   }
 
   /**

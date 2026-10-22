@@ -125,27 +125,46 @@ export default async function CaseDetail({
 
       {/* ---------------- the two photographs ---------------- */}
 
-      {score !== null ? (
+      {/*
+        Shown whenever there is a face to compare OR a score to show.
+        It used to require a score, which made the section invisible on the
+        gateway this system actually runs on: that gateway sells no face match,
+        so `faceMatchScore` is always null and the one screen whose purpose is
+        comparing two photographs never rendered them.
+      */}
+      {score !== null || detail.selfieUrl || detail.aadhaarPhotoUrl ? (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>The two photographs</h2>
 
           <div className="faces">
             <figure className="face">
-              <Portrait seed={detail.id} variant="selfie" />
+              <Portrait seed={detail.id} variant="selfie" src={detail.selfieUrl} />
               <figcaption>
                 <span className="facelabel">Selfie, today</span>
-                <span className="facemeta">taken during verification</span>
+                <span className="facemeta">
+                  {detail.selfieUrl ? "taken during verification" : "not uploaded yet"}
+                </span>
               </figcaption>
             </figure>
             <figure className="face">
-              <Portrait seed={detail.id} variant="aadhaar" />
+              <Portrait
+                seed={detail.id}
+                variant="aadhaar"
+                src={detail.aadhaarPhotoUrl}
+              />
               <figcaption>
                 <span className="facelabel">Aadhaar photo</span>
-                <span className="facemeta">as held by UIDAI</span>
+                <span className="facemeta">
+                  {detail.aadhaarPhotoUrl
+                    ? "as held by UIDAI"
+                    : "not returned by the gateway"}
+                </span>
               </figcaption>
             </figure>
           </div>
 
+          {/* No score without a face-match vendor, so no meter either. */}
+          {score !== null ? (
           <div className="meter">
             <div className="meter-top">
               <span>Face match</span>
@@ -173,13 +192,21 @@ export default async function CaseDetail({
               <span>1.00</span>
             </div>
           </div>
+          ) : (
+            <p className="footnote">
+              There is no face-match score, because the verification gateway in
+              use does not offer one. This comparison is the face check: look at
+              the two images and decide. Aadhaar photographs are frequently a
+              decade old and a few hundred pixels wide, so expect the Aadhaar
+              side to look dated even when it is the same person.
+            </p>
+          )}
 
           <p className="footnote">
-            Both images are drawn placeholders. The fake vendor returns scores
-            but no photographs, and inventing a face that looked real would make
-            this screen lie about what it is showing. With a real vendor these
-            are two signed URLs that expire in seconds, and opening either one
-            is written to the audit log.
+            A drawn placeholder means that image is genuinely absent — the fake
+            gateway returns no photograph, and a case can reach review before a
+            selfie is uploaded. Real images arrive as signed URLs that expire in
+            seconds, and opening either one is written to the audit log.
           </p>
         </div>
       ) : null}

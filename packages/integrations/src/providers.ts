@@ -66,7 +66,14 @@ export class VendorRequestError extends VendorError {
  * healthy. Both config schemas now read this array, so the next value can only
  * be added in one place.
  */
-export const KYC_PROVIDERS = ["fake", "sandbox", "cashfree"] as const;
+export const KYC_PROVIDERS = [
+  "fake",
+  /** Sandbox's Aadhaar OKYC. Deprecated by UIDAI; see the DigiLocker spec. */
+  "sandbox",
+  /** Sandbox's DigiLocker flow — the replacement Aadhaar route. */
+  "digilocker",
+  "cashfree",
+] as const;
 
 export type KycProviderName = (typeof KYC_PROVIDERS)[number];
 
@@ -97,8 +104,14 @@ export interface KycSession {
    *
    * Our vendor API key never leaves the server. This token is scoped to one
    * session and expires in minutes, so a leaked one is worth almost nothing.
+   *
+   * Optional, because not every hosted flow has one. DigiLocker's
+   * authorization URL carries its own state and PKCE challenge, so the URL
+   * IS the credential and there is no second token to hand over. Returning
+   * the session id here to fill the field would describe it as a short-lived
+   * secret, which it is not.
    */
-  clientToken: string;
+  clientToken?: string;
   expiresAt: Date;
   /**
    * A vendor-hosted web flow, when the vendor offers one.
@@ -185,12 +198,52 @@ export interface AadhaarOtpResult extends AadhaarResult {
    * and when.
    */
   refToken: string;
+  /**
+   * The UIDAI photograph, as the gateway returned it — usually a data URL.
+   *
+   * Carried because the comparison against a selfie has to be made by a
+   * person: no gateway this system can reach sells a face match, so the only
+   * face check available is a reviewer looking at two images. Without this
+   * one there is nothing to look at.
+   *
+   * Passed through, never stored by the adapter. The caller decides where the
+   * bytes go, and it puts them in the object store rather than a column.
+   */
+  photo?: string;
+  /**
+   * Why the gateway said no, in its own words. Only set on a FAILED status.
+   *
+   * Without it a failed check is indistinguishable from every other failed
+   * check, and the only message we could honestly show was "check the number"
+   * — which sends somebody to re-read the twelve digits they typed correctly
+   * when the real answer was a wrong OTP or an expired reference. Carries a
+   * status and a sentence, never demographic data.
+   */
+  failureReason?: string;
 }
+
+/**
+ * How a gateway collects an Aadhaar.
+ *
+ * "OTP"    — we take the number, the gateway sends a code, we send it back.
+ * "HOSTED" — the person goes to the gateway's own site and we never see a
+ *            number at all.
+ *
+ * Declared by each adapter rather than inferred from its name, because the
+ * screen a person sees differs entirely between the two and the web has to
+ * know which to render. Guessing from a provider string would mean every new
+ * adapter silently falls into whichever branch the comparison happens to
+ * miss — and the one that renders an Aadhaar number field for a gateway that
+ * must never receive one is the wrong way to be wrong.
+ */
+export type AadhaarRoute = "OTP" | "HOSTED";
 
 export interface KycProvider {
   readonly name: string;
   /** How this vendor signs its webhooks. */
   readonly webhookScheme: WebhookScheme;
+  /** Which Aadhaar journey this gateway supports. See AadhaarRoute. */
+  readonly aadhaarRoute: AadhaarRoute;
 
   createSession(request: CreateSessionRequest): Promise<KycSession>;
 

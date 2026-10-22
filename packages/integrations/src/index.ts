@@ -37,6 +37,7 @@ export {
   type FakeScenario,
   type GstLookupResult,
   type KybProvider,
+  type AadhaarRoute,
   type KycProvider,
   type KycProviderName,
   type KycRole,
@@ -93,6 +94,10 @@ export {
   SandboxKycProvider,
   type SandboxKycProviderOptions,
 } from "./sandboxKycProvider.js";
+export {
+  SandboxDigiLockerProvider,
+  type SandboxDigiLockerOptions,
+} from "./sandboxDigiLockerProvider.js";
 
 export { FakeKybProvider } from "./fakeKybProvider.js";
 

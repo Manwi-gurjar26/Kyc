@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { isValidAadhaarNumber } from "@kilowattx/validation";
 import {
   VendorRequestError,
+  type AadhaarRoute,
   VendorTimeoutError,
   type AadhaarOtpChallenge,
   type AadhaarOtpResult,
@@ -63,6 +64,18 @@ export interface FakeKycProviderOptions {
   clock?: () => Date;
   /** Applied when a request does not name its own scenario. */
   defaultScenario?: FakeScenario;
+  /**
+   * Which Aadhaar journey to pretend to be.
+   *
+   * The fake is the only adapter that can do both, which makes it the only
+   * one where this is a choice rather than a fact. It defaults to "OTP"
+   * because that is the flow the app has always used, and flipping the
+   * default would silently change what every existing test walks.
+   *
+   * Set "HOSTED" to rehearse the DigiLocker journey — leave the site, come
+   * back, collect — without the gateway.
+   */
+  aadhaarRoute?: AadhaarRoute;
 }
 
 /**
@@ -98,8 +111,48 @@ const SESSION_TTL_MINUTES = 20;
 /** How late the late_webhook scenario is, in seconds. */
 const LATE_WEBHOOK_DELAY_SECONDS = 90;
 
+/**
+ * Where the fake sends somebody instead of a real gateway.
+ *
+ * It used to be `http://localhost:4000/fake-vendor/kyc/{id}`, and no such
+ * route was ever written — so the hosted flow could not actually be walked in
+ * development, which is the one thing a fake hosted flow is for. The stand-in
+ * is a page on the web app, because that is where a page a person looks at
+ * belongs; the API has no business rendering a consent screen.
+ *
+ * The origin is taken from the caller's own redirect URL rather than pinned
+ * to localhost, so this still works behind a tunnel, on a preview deployment,
+ * or anywhere the web app is not where the fake guessed it would be.
+ *
+ * The redirect travels in the URL because the stand-in has to send the person
+ * back, and that is the half of a hosted flow the gateway cannot be asked to
+ * rehearse: leave the site, come back, and the server asks what happened.
+ */
+function standInUrl(
+  redirectUrl: string,
+  vendorSessionId: string,
+  locale: string,
+): string {
+  let origin = "http://localhost:3000";
+  try {
+    origin = new URL(redirectUrl).origin;
+  } catch {
+    /* A malformed redirect is the caller's problem; the default keeps the
+       fake usable rather than throwing inside a test fixture. */
+  }
+
+  const url = new URL("/fake-digilocker", origin);
+  url.searchParams.set("session", vendorSessionId);
+  url.searchParams.set("redirect_url", redirectUrl);
+  url.searchParams.set("lang", locale);
+  return url.toString();
+}
+
 export class FakeKycProvider implements KycProvider {
   readonly name = "fake";
+
+  /** Both are available here; the option decides. See the options type. */
+  readonly aadhaarRoute: AadhaarRoute;
 
   /**
    * The timestamped scheme, which is the stricter of the two: it gives local
@@ -131,6 +184,7 @@ export class FakeKycProvider implements KycProvider {
   private readonly byIdempotencyKey = new Map<string, string>();
 
   constructor(options: FakeKycProviderOptions) {
+    this.aadhaarRoute = options.aadhaarRoute ?? "OTP";
     if (!options.webhookSecret) {
       throw new Error(
         "FakeKycProvider: a webhook secret is required. Running without one would let local development skip signature verification entirely.",
@@ -171,7 +225,7 @@ export class FakeKycProvider implements KycProvider {
         .digest("hex")
         .slice(0, 32)}`,
       expiresAt: new Date(now.getTime() + SESSION_TTL_MINUTES * 60 * 1000),
-      hostedUrl: `http://localhost:4000/fake-vendor/kyc/${vendorSessionId}?lang=${request.locale}`,
+      hostedUrl: standInUrl(request.redirectUrl, vendorSessionId, request.locale),
     };
 
     /**
@@ -248,6 +302,24 @@ export class FakeKycProvider implements KycProvider {
     if (challenge.expiresAt.getTime() <= this.clock().getTime()) {
       this.challenges.delete(referenceId);
       throw new VendorRequestError("fake", "That OTP has expired. Please request a new one.");
+    }
+
+    /**
+     * A number ending in 9 makes the gateway fall over on verification.
+     *
+     * The other markers all produce a gateway that answered — an expired
+     * challenge, a wrong OTP — and there was no way to produce one that did
+     * not answer at all. So the branch where the OTP is never adjudicated
+     * went untested, and it was wrong: it spent one of the three attempts on
+     * a gateway outage. The real gateway did exactly this, returning 503
+     * "Source Unavailable", three times over.
+     *
+     * The challenge is deliberately left in place. Nothing was checked, so
+     * nothing has been used up, and the same OTP must still work afterwards —
+     * which is the half of the behaviour worth asserting.
+     */
+    if (challenge.aadhaarNumber.endsWith("9")) {
+      throw new VendorTimeoutError(this.name, 8000);
     }
 
     if (challenge.aadhaarNumber.endsWith("0") || otp !== "123456") {

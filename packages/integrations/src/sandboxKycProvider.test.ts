@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { SandboxKycProvider } from "./sandboxKycProvider.js";
+import {
+  SandboxKycProvider,
+  type SandboxKycProviderOptions,
+} from "./sandboxKycProvider.js";
 /** Moved to the shared client when the KYB adapter began using them too. */
 import { expiryOf, isoDate } from "./sandboxClient.js";
 
@@ -46,7 +49,6 @@ describe("dates coming back from the gateway", () => {
     expect(isoDate(undefined)).toBeUndefined();
     expect(isoDate("")).toBeUndefined();
     expect(isoDate("1985-04-21")).toBeUndefined();
-    expect(isoDate("21/04/1985")).toBeUndefined();
     expect(isoDate("not a date")).toBeUndefined();
   });
 
@@ -88,6 +90,71 @@ describe("what it refuses before making a request", () => {
   test("a number of the wrong length is refused too", async () => {
     const provider = new SandboxKycProvider(OPTIONS);
     await expect(provider.sendAadhaarOtp("12345")).rejects.toThrow(/not valid/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * A stand-in for the transport, so the field mapping can be tested.
+ *
+ * The rest of this file avoids HTTP on the grounds that a mocked fetch only
+ * proves the mock matches my reading of the docs. This is narrower: the body
+ * below is copied from their published verify response, and what is under
+ * test is purely what our adapter does with it.
+ */
+function clientReturning(data: unknown) {
+  return {
+    name: "sandbox",
+    call: async () => ({
+      code: 200,
+      timestamp: 0,
+      transaction_id: "txn_test_1",
+      data,
+    }),
+  } as unknown as SandboxKycProviderOptions["client"];
+}
+
+describe("the Aadhaar photograph", () => {
+  /**
+   * Their verify response carries a photo and it used to be dropped.
+   *
+   * It matters now because this gateway sells no face match: the comparison
+   * against the selfie is done by a reviewer, and without this image there is
+   * nothing on screen to compare against.
+   */
+  test("the photograph is surfaced from the verify response", async () => {
+    const provider = new SandboxKycProvider({
+      ...OPTIONS,
+      client: clientReturning({
+        status: "VALID",
+        message: "Aadhaar Card Exists",
+        name: "John Doe",
+        date_of_birth: "21-04-1985",
+        photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+      }),
+    });
+
+    const result = await provider.verifyAadhaarOtp("1234567", "121212");
+
+    expect(result.status).toBe("SUCCESS");
+    expect(result.photo).toBe("data:image/jpeg;base64,/9j/4AAQSkZJRg==");
+  });
+
+  /** Absent rather than empty: the fake gateway returns no photograph at all. */
+  test("a response with no photograph leaves it undefined", async () => {
+    const provider = new SandboxKycProvider({
+      ...OPTIONS,
+      client: clientReturning({
+        status: "VALID",
+        message: "Aadhaar Card Exists",
+        name: "John Doe",
+        date_of_birth: "21-04-1985",
+      }),
+    });
+
+    const result = await provider.verifyAadhaarOtp("1234567", "121212");
+    expect(result.photo).toBeUndefined();
   });
 });
 
@@ -151,5 +218,29 @@ describe("how long the access token is good for", () => {
     expect(expiryOf("not-a-jwt")).toBeUndefined();
     expect(expiryOf("header.!!!notbase64!!!.sig")).toBeUndefined();
     expect(expiryOf(`header.${Buffer.from("{}").toString("base64url")}.sig`)).toBeUndefined();
+  });
+});
+
+describe("how this gateway collects Aadhaar", () => {
+  test("OKYC is an OTP route", () => {
+    expect(new SandboxKycProvider(OPTIONS).aadhaarRoute).toBe("OTP");
+  });
+});
+
+describe("dates from DigiLocker", () => {
+  /**
+   * Their user profile uses slashes where OKYC used hyphens. Confirmed
+   * against a real completed session; the published example showed an epoch
+   * number instead, which is why this is asserted rather than assumed.
+   */
+  test("DD/MM/YYYY converts too", () => {
+    expect(isoDate("26/05/2004")).toBe("2004-05-26");
+    expect(isoDate("21/04/1985")).toBe("1985-04-21");
+  });
+
+  /** Still refuses anything it cannot read, rather than guessing a date. */
+  test("a mixed or malformed separator is still undefined", () => {
+    expect(isoDate("26/05-2004")).toBeUndefined();
+    expect(isoDate("2004/05/26")).toBeUndefined();
   });
 });
