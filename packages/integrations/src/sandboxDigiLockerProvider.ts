@@ -41,8 +41,14 @@ import { SandboxClient, isoDate } from "./sandboxClient.js";
 const ROUTES = {
   init: "/kyc/digilocker/sessions/init",
   status: (id: string) => `/kyc/digilocker/sessions/${id}/status`,
-  document: (id: string, type: string) =>
-    `/kyc/digilocker/sessions/${id}/documents/${type}`,
+  /**
+   * The person's details, confirmed against a real completed session.
+   *
+   * NOT /documents/{type}. That route returns S3 links to the issued files —
+   * the UIDAI XML — which would have to be downloaded and parsed. The profile
+   * is the parsed form and is what an AadhaarResult actually needs.
+   */
+  profile: (id: string) => `/kyc/digilocker/sessions/${id}/user/profile`,
 } as const;
 
 /**
@@ -181,10 +187,13 @@ export class SandboxDigiLockerProvider implements KycProvider {
      * that reaches a human: the person is left waiting either way, and only
      * one of those gets looked at.
      *
-     * Which strings mean what is listed as an open question in the spec —
-     * their documentation shows "created" and does not enumerate the rest.
+     * "succeeded" is the real one, confirmed against a completed session —
+     * their documentation shows only "created" and never enumerates the rest.
+     * It was guessed as "success" and a finished verification was therefore
+     * refused, which is the whole reason this list is now evidence and not
+     * inference. The other two are kept as a hedge, not as knowledge.
      */
-    if (state !== "consented" && state !== "completed" && state !== "success") {
+    if (state !== "succeeded" && state !== "consented" && state !== "completed") {
       throw new VendorRequestError(
         this.name,
         `DigiLocker reported the session as "${state || "unknown"}", ` +
@@ -193,31 +202,43 @@ export class SandboxDigiLockerProvider implements KycProvider {
       );
     }
 
-    const document = await this.client.call<{
+    /**
+     * The user profile, not the document.
+     *
+     * Confirmed against a real session: this returns name, date_of_birth,
+     * gender, mobile and email as parsed fields. What it does NOT return is
+     * an Aadhaar number in any form, or a photograph — so there is no `last4`
+     * to keep and nothing for a reviewer to compare a selfie against.
+     */
+    const profile = await this.client.call<{
       name?: string;
+      /** "26/05/2004" — DD/MM/YYYY, with slashes. Not the epoch their docs show. */
       date_of_birth?: string;
-      dob?: string;
       gender?: string;
-      photo?: string;
-      /** Masked by the issuer where present; we keep only four digits of it. */
-      aadhaar_number?: string;
-      masked_aadhaar_number?: string;
-    }>(ROUTES.document(vendorSessionId, "aadhaar"), undefined, "GET");
+      /** True when the shared document was an Aadhaar. */
+      eaadhaar?: boolean;
+    }>(ROUTES.profile(vendorSessionId), undefined, "GET");
 
-    const record = document.data;
+    const record = profile.data;
 
     return {
       vendorSessionId,
       vendor: this.name,
       vendorVersion: "digilocker-1.0.0",
       /** Their transaction id is the event identity for the replay guard. */
-      eventId: document.transaction_id,
+      eventId: profile.transaction_id,
       aadhaar: {
         status: record?.name ? "SUCCESS" : "FAILED",
         nameOnRecord: record?.name,
         /** They have used both spellings in published examples. */
-        dateOfBirth: isoDate(record?.date_of_birth ?? record?.dob),
-        last4: lastFourOf(record?.masked_aadhaar_number ?? record?.aadhaar_number),
+        dateOfBirth: isoDate(record?.date_of_birth),
+        /**
+         * Absent, always. DigiLocker shares the person's details and never
+         * the number, so there is nothing to take four digits from — and a
+         * fabricated four would show somebody a stranger's. `remainingSteps`
+         * must therefore key off the reference token, not this.
+         */
+        last4: undefined,
         /**
          * The session id is what we quote back when asked what we checked.
          * It is not derived from the Aadhaar number, because we never see one.

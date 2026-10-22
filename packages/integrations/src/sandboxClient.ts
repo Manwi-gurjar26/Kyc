@@ -331,9 +331,19 @@ export function expiryOf(token: string): number | undefined {
 export function isoDate(value: string | undefined): string | undefined {
   if (!value) return undefined;
 
-  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value.trim());
+  /**
+   * Both separators, because this gateway uses both.
+   *
+   * OKYC returns "21-04-1985" and DigiLocker's user profile returns
+   * "26/05/2004" — confirmed against a real completed session, and not what
+   * their published example showed, which was an epoch in milliseconds.
+   * Accepting only hyphens silently returned undefined for every DigiLocker
+   * date of birth, and a missing date is how decideKyc decides somebody might
+   * be a minor.
+   */
+  const match = /^(\d{2})([-/])(\d{2})\2(\d{4})$/.exec(value.trim());
   if (!match) return undefined;
 
-  const [, day, month, year] = match;
+  const [, day, , month, year] = match;
   return `${year}-${month}-${day}`;
 }

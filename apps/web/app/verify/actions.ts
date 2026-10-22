@@ -85,13 +85,21 @@ export async function startHostedAadhaar(): Promise<
  * would believe.
  */
 export async function collectHostedAadhaar(
-  vendorSessionId: string,
+  vendorSessionId?: string,
 ): Promise<Failure & { status?: string; reasonCodes?: string[] }> {
   try {
-    const result = await api<{ status: string; reasonCodes: string[] }>(
-      `/v1/kyc/sessions/${encodeURIComponent(vendorSessionId)}/collect`,
-      { method: "POST" },
-    );
+    /**
+     * Without an id when the gateway did not give one back, which DigiLocker
+     * does not. The server resolves the session from the signed-in person's
+     * own record; the browser never had to carry it.
+     */
+    const path = vendorSessionId
+      ? `/v1/kyc/sessions/${encodeURIComponent(vendorSessionId)}/collect`
+      : "/v1/kyc/sessions/collect";
+
+    const result = await api<{ status: string; reasonCodes: string[] }>(path, {
+      method: "POST",
+    });
     return { status: result.status, reasonCodes: result.reasonCodes };
   } catch (error) {
     return failure(error);

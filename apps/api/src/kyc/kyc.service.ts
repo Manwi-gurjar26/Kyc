@@ -36,7 +36,7 @@ import {
   VendorRequestError,
 } from "@kilowattx/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { ConsentInput, CreateKycSessionInput } from "@kilowattx/validation";
 import {
   applyVendorResult,
@@ -787,6 +787,8 @@ export class KycService {
         })
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1),
     );
 
@@ -934,6 +936,26 @@ export class KycService {
   }
 
   /**
+   * The record a step should be writing to: this person's most recent.
+   *
+   * Every opened session creates one, so "the record for this user" is not a
+   * single row once somebody has retried. Picking the newest consistently is
+   * what keeps the steps, the decision and the status page talking about the
+   * same attempt.
+   */
+  private async currentRecordId(userId: string): Promise<string | undefined> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ id: kycRecords.id })
+        .from(kycRecords)
+        .where(eq(kycRecords.userId, userId))
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+    return rows[0]?.id;
+  }
+
+  /**
    * Whether a selfie is on file and safe to look at.
    *
    * CLEAN specifically, not merely uploaded. A quarantined or unscanned file
@@ -976,6 +998,8 @@ export class KycService {
         .select({ name: kycRecords.aadhaarName, dob: kycRecords.aadhaarDob })
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1),
     );
 
@@ -1045,6 +1069,18 @@ export class KycService {
      * set IN_PROGRESS because it is the first step and the record is
      * NOT_STARTED when it runs.
      */
+    /**
+     * One record, the newest — not every record this person has.
+     *
+     * `where(userId)` updated all of them, and somebody who started the flow
+     * more than once has several. With a unique index on `pan_blind_index`
+     * that is not a tidiness problem: writing the same index to a second row
+     * violates the constraint and the whole PAN step fails for anybody who
+     * ever retried.
+     */
+    const target = await this.currentRecordId(userId);
+    if (!target) return;
+
     await withContext(this.db, { role: "system" }, (tx) =>
       tx
         .update(kycRecords)
@@ -1054,7 +1090,7 @@ export class KycService {
           panBlindIndex: fields.blindIndex,
           updatedAt: now,
         })
-        .where(eq(kycRecords.userId, userId)),
+        .where(eq(kycRecords.id, target)),
     );
   }
 
@@ -1164,6 +1200,8 @@ export class KycService {
         .select({ id: kycRecords.id, aadhaarLast4: kycRecords.aadhaarLast4 })
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
+        /** Newest first: a person who retried has several records. */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1);
 
       if (existing[0]) {
@@ -1214,7 +1252,16 @@ export class KycService {
         .select()
         .from(kycRecords)
         .where(eq(kycRecords.userId, userId))
-        .orderBy(kycRecords.createdAt)
+        /**
+         * Newest first, and this was ascending.
+         *
+         * Every opened session creates a record, so somebody who started the
+         * flow more than once has several — and this returned the oldest,
+         * which is the attempt they abandoned. A person who had just
+         * completed a DigiLocker verification was shown the state of their
+         * first try: IN_PROGRESS, Aadhaar still outstanding, no way forward.
+         */
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1),
     );
 
@@ -1247,6 +1294,7 @@ export class KycService {
   private remainingSteps(
     record: {
       aadhaarLast4: string | null;
+      aadhaarRefToken: string | null;
       panLast4: string | null;
       livenessPassed: boolean | null;
       status: string;
@@ -1256,7 +1304,22 @@ export class KycService {
   ): string[] {
     if (record.status === "VERIFIED") return [];
     const steps: string[] = [];
-    if (!record.aadhaarLast4) steps.push("AADHAAR");
+    /**
+     * Done when the gateway gave us a reference token, not when four digits
+     * were written.
+     *
+     * It asked for `aadhaar_last4`, which OKYC wrote when an OTP was merely
+     * requested — so a person who asked for a code and never typed it looked
+     * finished. DigiLocker made the same line wrong in the opposite
+     * direction: it shares a name and a date of birth and never a number at
+     * all, so a completed verification left `aadhaar_last4` null and the step
+     * stayed outstanding for ever.
+     *
+     * The reference token is the thing that only exists once a gateway has
+     * actually confirmed somebody, which is what `decideFromSteps` has always
+     * used.
+     */
+    if (!record.aadhaarRefToken) steps.push("AADHAAR");
     if (!record.panLast4) steps.push("PAN");
 
     /**
@@ -1361,7 +1424,7 @@ export class KycService {
     options: { orgId?: string } = {},
   ): Promise<SubjectKycState> {
     const rows = await withContext(this.db, { role: "system" }, (tx) =>
-      tx.select().from(kycRecords).where(eq(kycRecords.userId, userId)).limit(1),
+      tx.select().from(kycRecords).where(eq(kycRecords.userId, userId)).orderBy(desc(kycRecords.createdAt)).limit(1),
     );
     const record = rows[0];
 
@@ -1519,8 +1582,22 @@ export class KycService {
    */
   async collectSession(
     userId: string,
-    vendorSessionId: string,
+    vendorSessionId?: string,
   ): Promise<{ status: KycStatus; reasonCodes: string[] }> {
+    /**
+     * The session id is optional, because the gateway does not always give it
+     * back.
+     *
+     * DigiLocker returns the person to our redirect URL with its own
+     * parameters, and none of them is the session we opened — so a page that
+     * required one showed "nothing to finish" to somebody who had just
+     * completed a verification. The browser never needed to carry it: this
+     * person opened the session, so the server already knows which it was.
+     *
+     * When an id IS supplied it is still honoured and still checked against
+     * the caller's own record, because that is the case where it arrives
+     * through a browser and is therefore a claim rather than a fact.
+     */
     const rows = await withContext(this.db, { role: "system" }, (tx) =>
       tx
         .select({
@@ -1528,9 +1605,15 @@ export class KycService {
           status: kycRecords.status,
           userId: kycRecords.userId,
           reasons: kycRecords.decisionReasons,
+          vendorSessionId: kycRecords.vendorSessionId,
         })
         .from(kycRecords)
-        .where(eq(kycRecords.vendorSessionId, vendorSessionId))
+        .where(
+          vendorSessionId
+            ? eq(kycRecords.vendorSessionId, vendorSessionId)
+            : eq(kycRecords.userId, userId),
+        )
+        .orderBy(desc(kycRecords.createdAt))
         .limit(1),
     );
 
@@ -1546,10 +1629,10 @@ export class KycService {
      * the session exists, which is a question a stranger has no business
      * getting an answer to.
      */
-    if (!record || record.userId !== userId) {
+    if (!record || record.userId !== userId || !record.vendorSessionId) {
       throw ApiError.notFound(
         "SESSION_NOT_FOUND",
-        "That verification session does not exist.",
+        "There is no verification session to finish.",
       );
     }
 
@@ -1570,7 +1653,7 @@ export class KycService {
 
     let result: VendorKycResult;
     try {
-      result = await this.provider.fetchResult(vendorSessionId);
+      result = await this.provider.fetchResult(record.vendorSessionId);
     } catch (error) {
       throw this.vendorFailure(error, "We could not check that verification just now.");
     }

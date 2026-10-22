@@ -56,26 +56,15 @@ export default async function HostedReturnPage({
 }) {
   const { session, outcome } = await searchParams;
 
-  /**
-   * No session to ask about. This is the "closed the tab and came back to an
-   * old link" case, and it is not an error worth alarming anybody with.
+  /*
+   * No `session` in the URL is the normal case, not an error.
+   *
+   * This page used to stop here and say "nothing to finish", which is what
+   * somebody saw after completing a real DigiLocker verification: the
+   * gateway returns people to our redirect URL with its own parameters and
+   * none of them is the session we opened. The server knows which session
+   * this person has; the browser never needed to tell it.
    */
-  if (!session) {
-    return (
-      <div className="flow">
-        <StepBar step={2} back="/" />
-        <h1>Nothing to finish</h1>
-        <p className="flowlead">
-          This page needs a verification session to check on, and there is none
-          in the link you followed. Starting again takes a moment.
-        </p>
-        <Link className="cta" href="/verify/individual">
-          Start again →
-        </Link>
-      </div>
-    );
-  }
-
   /**
    * Collected even when the gateway said "declined" on its way back.
    *

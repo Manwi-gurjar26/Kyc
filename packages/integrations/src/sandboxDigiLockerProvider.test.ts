@@ -140,23 +140,24 @@ describe("opening a session", () => {
 /* ------------------------------------------------------------------ */
 
 describe("collecting the result", () => {
-  const AADHAAR_DOC = {
+  /** Copied from a real completed session, slashes and all. */
+  const PROFILE = {
     name: "Ramesh Kumar Sharma",
-    date_of_birth: "14-03-1979",
-    gender: "M",
-    masked_aadhaar_number: "XXXXXXXX7731",
+    date_of_birth: "14/03/1979",
+    gender: "male",
+    eaadhaar: true,
   };
 
-  function provider(status: string, document: unknown = AADHAAR_DOC) {
+  function provider(status: string, document: unknown = PROFILE) {
     return new SandboxDigiLockerProvider({
       ...OPTIONS,
       clock: () => new Date("2026-10-21T10:00:00Z"),
-      client: clientFor({ "/status": { id: "sess_1", status }, "/documents/": document }),
+      client: clientFor({ "/status": { id: "sess_1", status }, "/user/profile": document }),
     });
   }
 
   test("a consented session becomes a verified Aadhaar result", async () => {
-    const result = await provider("consented").fetchResult("sess_1");
+    const result = await provider("succeeded").fetchResult("sess_1");
 
     expect(result.aadhaar?.status).toBe("SUCCESS");
     expect(result.aadhaar?.nameOnRecord).toBe("Ramesh Kumar Sharma");
@@ -165,40 +166,18 @@ describe("collecting the result", () => {
     expect(result.vendor).toBe("digilocker");
   });
 
-  /** The only part of the number we may keep, taken from their masked form. */
-  test("four digits are kept from the masked number", async () => {
-    const result = await provider("consented").fetchResult("sess_1");
-    expect(result.aadhaar?.last4).toBe("7731");
-  });
-
   /**
-   * And never invented. The spec flags that DigiLocker may not supply a
-   * number at all, and four fabricated digits would show somebody a stranger's.
+   * There is no number to keep four digits of.
+   *
+   * Confirmed against a real session: the profile carries a name, a date of
+   * birth, a gender and a mobile, and no Aadhaar number in any form. This is
+   * asserted rather than left implicit because `remainingSteps` used to
+   * decide the Aadhaar step was done by looking at exactly this field.
    */
-  test("no number shared means no last four, not a guess", async () => {
-    const result = await provider("consented", {
-      name: "Ramesh Kumar Sharma",
-      date_of_birth: "14-03-1979",
-    }).fetchResult("sess_1");
-
+  test("no last four is available from DigiLocker at all", async () => {
+    const result = await provider("succeeded").fetchResult("sess_1");
     expect(result.aadhaar?.last4).toBeUndefined();
     expect(result.aadhaar?.status).toBe("SUCCESS");
-  });
-
-  /**
-   * A number too short to take four digits from is also not a guess.
-   *
-   * Added after a mutation test: the case above passes a document with no
-   * number at all, so it never reached the branch that decides what to do
-   * with an unusable one. Padding it to "0000" went undetected.
-   */
-  test("an unusable number yields no last four either", async () => {
-    const result = await provider("consented", {
-      name: "Ramesh Kumar Sharma",
-      masked_aadhaar_number: "XXX",
-    }).fetchResult("sess_1");
-
-    expect(result.aadhaar?.last4).toBeUndefined();
   });
 
   /**
@@ -206,7 +185,7 @@ describe("collecting the result", () => {
    * there is no number here to derive it from.
    */
   test("the session id is what we quote back as the reference", async () => {
-    const result = await provider("consented").fetchResult("sess_1");
+    const result = await provider("succeeded").fetchResult("sess_1");
     expect(result.aadhaar?.refToken).toBe("sess_1");
   });
 
@@ -234,7 +213,7 @@ describe("collecting the result", () => {
 
   /** A consented session with no name is not a pass. */
   test("a document with no name does not read as success", async () => {
-    const result = await provider("consented", { gender: "M" }).fetchResult("sess_1");
+    const result = await provider("succeeded", { gender: "M" }).fetchResult("sess_1");
     expect(result.aadhaar?.status).toBe("FAILED");
   });
 });

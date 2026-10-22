@@ -133,6 +133,20 @@ export class KycController {
    * Safe to call twice. Somebody reloading the page gets the decision already
    * recorded, without a second vendor call.
    */
+  /**
+   * The same thing without an id, for a gateway that does not give one back.
+   *
+   * DigiLocker returns the person to our redirect URL carrying its own
+   * parameters, none of which is the session we opened. The server resolves
+   * it from the caller's own record instead — which it could always have
+   * done, since that person is the one who opened it.
+   */
+  @Post("sessions/collect")
+  async collectCurrentSession(@Req() request: RequestWithSession) {
+    const session = sessionOf(request);
+    return this.kyc.collectSession(session.userId);
+  }
+
   @Post("sessions/:vendorSessionId/collect")
   async collectSession(
     @Req() request: RequestWithSession,
