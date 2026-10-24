@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { PostgresSeenEventStore, createClient, outboxStats, withContext } from "@kilowattx/db";
 import {
   FakeKycProvider,
+  SandboxDigiLockerProvider,
   SandboxKycProvider,
   type KycProvider,
 } from "@kilowattx/integrations";
@@ -85,6 +86,22 @@ function buildProvider(config: Config): KycProvider {
     }
 
     return new SandboxKycProvider({
+      apiKey: config.KYC_VENDOR_CLIENT_ID,
+      apiSecret: config.KYC_VENDOR_CLIENT_SECRET,
+      nodeEnv: config.NODE_ENV,
+      webhookSecret: config.KYC_WEBHOOK_SECRET,
+    });
+  }
+
+  if (config.KYC_PROVIDER === "digilocker") {
+    if (!config.KYC_VENDOR_CLIENT_ID || !config.KYC_VENDOR_CLIENT_SECRET) {
+      throw new Error(
+        "KYC_PROVIDER=digilocker needs KYC_VENDOR_CLIENT_ID and KYC_VENDOR_CLIENT_SECRET. " +
+          "The worker reconciles against the same gateway as the API, so it needs the same key.",
+      );
+    }
+
+    return new SandboxDigiLockerProvider({
       apiKey: config.KYC_VENDOR_CLIENT_ID,
       apiSecret: config.KYC_VENDOR_CLIENT_SECRET,
       nodeEnv: config.NODE_ENV,
