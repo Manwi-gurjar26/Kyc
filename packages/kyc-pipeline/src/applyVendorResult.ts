@@ -177,10 +177,13 @@ function buildChecks(
   }
 
   if (result.selfie) {
-    checks.push({
-      checkType: "LIVENESS",
-      status: result.selfie.livenessPassed ? "PASSED" : "FAILED",
-    });
+    /** No row for a liveness check nobody ran: absent is not FAILED. */
+    if (result.selfie.livenessPassed !== undefined) {
+      checks.push({
+        checkType: "LIVENESS",
+        status: result.selfie.livenessPassed ? "PASSED" : "FAILED",
+      });
+    }
     checks.push({
       checkType: "FACE_MATCH",
       status:

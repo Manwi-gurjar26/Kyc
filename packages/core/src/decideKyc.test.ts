@@ -312,6 +312,30 @@ describe("decideKyc — anything unclear goes to a person", () => {
     expect(codes(decision.reasons)).toContain("LIVENESS_FAILED");
   });
 
+  /**
+   * Our own matcher scores the face against the Aadhaar photograph and has no
+   * liveness model. A good match verifies, and the record carries a flag
+   * saying liveness was never checked — it is not quietly read as a pass.
+   */
+  test("a face match with no liveness check verifies, flagged", () => {
+    const decision = decideKyc(
+      fullKyc({ selfie: { faceMatchScore: 0.93 } }),
+      DEFAULT_KYC_THRESHOLDS,
+    );
+    expect(decision.status).toBe("VERIFIED");
+    const reason = decision.reasons.find((r) => r.code === "LIVENESS_NOT_CHECKED");
+    expect(reason?.severity).toBe("FLAG");
+  });
+
+  test("a weak face match with no liveness check still goes to review", () => {
+    const decision = decideKyc(
+      fullKyc({ selfie: { faceMatchScore: 0.68 } }),
+      DEFAULT_KYC_THRESHOLDS,
+    );
+    expect(decision.status).toBe("MANUAL_REVIEW");
+    expect(codes(decision.reasons)).toContain("FACE_MATCH_LOW");
+  });
+
   test("a PAN name mismatch goes to review — marriage name changes are common", () => {
     const decision = decideKyc(
       fullKyc({

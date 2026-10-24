@@ -25,10 +25,12 @@ import {
   type Database,
 } from "@kilowattx/db";
 import {
+  FACE_CLEAR_MISMATCH,
   KYC_DOCS_PREFIX,
   LocalDiskBucket,
   ReplayGuard,
   verifyWebhook,
+  type FaceMatcher,
   type KybProvider,
   type AadhaarRoute,
   type KycProvider,
@@ -36,7 +38,7 @@ import {
   VendorRequestError,
 } from "@kilowattx/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { ConsentInput, CreateKycSessionInput } from "@kilowattx/validation";
 import {
   applyVendorResult,
@@ -105,6 +107,30 @@ const OTP_CHALLENGE_MINUTES = 10;
 /** UIDAI allows a few tries. A million-value secret gets no more than that. */
 const MAX_OTP_ATTEMPTS = 3;
 
+/**
+ * Selfies that clearly do not match before the case goes to a person.
+ *
+ * The first two are refused with "try again"; the third is kept and the case
+ * reviewed. Refusing for ever would lock out a genuine person behind a bad
+ * Aadhaar photograph, and accepting the first would let a stranger's face
+ * straight through.
+ */
+const MAX_FACE_ATTEMPTS = 3;
+
+/**
+ * What came of checking a selfie that was accepted.
+ *
+ * MATCHED    scored at or above the pass mark
+ * REVIEW     kept, but weak or repeatedly mismatched — a person will look
+ * UNCHECKED  nothing to compare: no models, or no Aadhaar photograph
+ *
+ * Refusals are not here. They are thrown, because the selfie was not accepted.
+ */
+export interface SelfieCheck {
+  outcome: "MATCHED" | "REVIEW" | "UNCHECKED";
+  score?: number;
+}
+
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
@@ -127,6 +153,8 @@ export class KycService {
      * Where the UIDAI photograph goes. The row holds a key, never the image.
      */
     @Inject(DI.FILE_BUCKET) private readonly bucket: LocalDiskBucket,
+    /** Null when the face models are not installed. See buildFaceMatcher. */
+    @Inject(DI.FACE_MATCHER) private readonly faceMatcher: FaceMatcher | null,
   ) {}
 
   /* ---------------------------------------------------------------- */
@@ -810,6 +838,8 @@ export class KycService {
         }
       : undefined;
 
+    const faceMatchScore = await this.acceptedSelfieScore(userId);
+
     const decision = decideKyc(
       {
         level: record.level as KycLevel,
@@ -817,20 +847,19 @@ export class KycService {
         aadhaar,
         pan,
         /**
-         * Always undefined, and that is not an oversight.
+         * The score our own matcher gave the selfie, and nothing else.
          *
-         * A SelfieResult carries `livenessPassed` and a face-match score, and
-         * this gateway sells neither — there is no call that would produce
-         * them. Supplying a made-up pair here would auto-approve a biometric
-         * nobody examined, which is the same failure the fake virus scanner
-         * is refused in production for.
+         * `livenessPassed` is left undefined, never filled in: there is no
+         * liveness model, and supplying `true` would auto-approve a check
+         * nobody ran. `decideKyc` records it as not checked.
          */
-        selfie: undefined,
+        selfie: faceMatchScore === null ? undefined : { faceMatchScore },
         /**
-         * What we can say truthfully: a selfie is on file and unscored. It
+         * When there is no score: a selfie on file that nobody compared. It
          * reviews either way; this only changes what the reviewer is told.
          */
-        selfieCollectedButNotScored: await this.hasCleanSelfie(userId),
+        selfieCollectedButNotScored:
+          faceMatchScore === null && (await this.hasCleanSelfie(userId)),
         /**
          * False by construction: `verifyPan` refuses a PAN held by another
          * subject before the Department is ever called, so a duplicate
@@ -866,8 +895,22 @@ export class KycService {
         decision,
         thresholds,
         now,
+        ...(faceMatchScore === null ? {} : { faceMatchScore }),
         /** One row per check this flow actually performed. */
         checks: [
+          ...(faceMatchScore === null
+            ? []
+            : [
+                {
+                  checkType: "FACE_MATCH" as const,
+                  status:
+                    faceMatchScore >= thresholds.faceMatch
+                      ? ("PASSED" as const)
+                      : ("FAILED" as const),
+                  score: faceMatchScore,
+                  detail: `Selfie against the Aadhaar photograph, on our own matcher; pass mark ${thresholds.faceMatch}. No liveness check was run.`,
+                },
+              ]),
           ...(aadhaar
             ? [
                 {
@@ -970,17 +1013,187 @@ export class KycService {
       tx
         .select({ id: documents.id })
         .from(documents)
-        .where(
-          and(
-            eq(documents.ownerUserId, userId),
-            eq(documents.docType, "SELFIE"),
-            eq(documents.scanStatus, "CLEAN"),
-          ),
-        )
+        .where(and(eq(documents.ownerUserId, userId), acceptedSelfie()))
         .limit(1),
     );
 
     return rows.length > 0;
+  }
+
+  /**
+   * The face score of the selfie this verification will be decided on.
+   *
+   * The newest accepted one, because a retake replaces its predecessor. Null
+   * when that selfie was never compared, which `decideFromSteps` reports as
+   * collected-but-unscored rather than inventing a score.
+   */
+  private async acceptedSelfieScore(userId: string): Promise<number | null> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ score: documents.faceMatchScore })
+        .from(documents)
+        .where(and(eq(documents.ownerUserId, userId), acceptedSelfie()))
+        .orderBy(desc(documents.createdAt))
+        .limit(1),
+    );
+
+    const score = rows[0]?.score;
+    return score === null || score === undefined ? null : Number(score);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Selfie against the Aadhaar photograph                            */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Compares a freshly uploaded selfie with the Aadhaar photograph.
+   *
+   * Called once the selfie has scanned clean. A clear mismatch — or no face,
+   * or two — is refused on the spot with a reason the person can act on, and
+   * the document is marked `approved = false` so nothing downstream counts it
+   * as the selfie on file. It is kept, not deleted: a run of different faces
+   * against one Aadhaar is what a fraud reviewer most needs to see.
+   *
+   * After MAX_FACE_ATTEMPTS clear mismatches the selfie is accepted anyway and
+   * its low score sends the case to a person. Refusing for ever would lock out
+   * a genuine customer behind a twelve-year-old Aadhaar photograph.
+   *
+   * When there is nothing to compare against — no models on this machine, no
+   * Aadhaar photograph, an image we cannot decode — the selfie is accepted
+   * unscored and reviewed by eye, exactly as before this check existed.
+   */
+  async checkSelfie(
+    userId: string,
+    documentId: string,
+    storageKey: string,
+  ): Promise<SelfieCheck> {
+    if (!this.faceMatcher) return { outcome: "UNCHECKED" };
+
+    const photoKey = await this.aadhaarPhotoKeyOf(userId);
+    if (!photoKey) return { outcome: "UNCHECKED" };
+
+    const [selfie, reference] = await Promise.all([
+      this.bucket.get(storageKey),
+      this.bucket.get(photoKey),
+    ]);
+    if (!selfie || !reference) {
+      this.logger.warn(
+        `Selfie ${documentId}: ${selfie ? "the Aadhaar photograph" : "the selfie"} is missing from the bucket; not compared.`,
+      );
+      return { outcome: "UNCHECKED" };
+    }
+
+    let comparison: Awaited<ReturnType<FaceMatcher["compare"]>>;
+    try {
+      comparison = await this.faceMatcher.compare(selfie.bytes, reference.bytes);
+    } catch (error) {
+      this.logger.error(
+        `Selfie ${documentId}: the face matcher failed; accepted unscored for review.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return { outcome: "UNCHECKED" };
+    }
+
+    switch (comparison.kind) {
+      case "NO_FACE_IN_SELFIE":
+        await this.recordSelfie(documentId, { refused: true });
+        throw ApiError.badRequest(
+          "SELFIE_NO_FACE",
+          "We could not see a face in that photo. Face the camera in good light and try again.",
+        );
+
+      case "SEVERAL_FACES_IN_SELFIE":
+        await this.recordSelfie(documentId, { refused: true });
+        throw ApiError.badRequest(
+          "SELFIE_SEVERAL_FACES",
+          "There is more than one face in that photo. Make sure only you are in the picture and try again.",
+        );
+
+      /** Ours to fix, not theirs: accepted, and a person compares them. */
+      case "NO_FACE_IN_REFERENCE":
+      case "UNREADABLE_IMAGE":
+        this.logger.warn(`Selfie ${documentId}: not compared (${comparison.kind}).`);
+        return { outcome: "UNCHECKED" };
+
+      case "COMPARED":
+        break;
+    }
+
+    /** The column holds three places; storing more would differ from what was judged. */
+    const score = Math.round(comparison.score * 1000) / 1000;
+
+    if (score < FACE_CLEAR_MISMATCH) {
+      const earlier = await this.refusedMismatchCount(userId);
+
+      if (earlier + 1 < MAX_FACE_ATTEMPTS) {
+        await this.recordSelfie(documentId, { refused: true, score });
+        const left = MAX_FACE_ATTEMPTS - (earlier + 1);
+
+        throw ApiError.badRequest(
+          "FACE_MISMATCH",
+          "This photo does not match the photo on your Aadhaar. Please make sure it is you, " +
+            `face the camera in good light, and try again. ${left} ${left === 1 ? "try" : "tries"} left.`,
+          { attemptsLeft: left },
+        );
+      }
+
+      this.logger.warn(
+        `Selfie ${documentId}: ${MAX_FACE_ATTEMPTS} clear mismatches against the Aadhaar photograph; ` +
+          "accepted for manual review.",
+      );
+    }
+
+    await this.recordSelfie(documentId, { refused: false, score });
+
+    const { faceMatch } = await this.thresholds();
+    return { outcome: score >= faceMatch ? "MATCHED" : "REVIEW", score };
+  }
+
+  /** The newest record's Aadhaar photograph key, if one was stored. */
+  private async aadhaarPhotoKeyOf(userId: string): Promise<string | null> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ key: kycRecords.aadhaarPhotoKey })
+        .from(kycRecords)
+        .where(eq(kycRecords.userId, userId))
+        .orderBy(desc(kycRecords.createdAt))
+        .limit(1),
+    );
+    return rows[0]?.key ?? null;
+  }
+
+  /** Selfies refused for not matching, across every attempt this person made. */
+  private async refusedMismatchCount(userId: string): Promise<number> {
+    const rows = await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.ownerUserId, userId),
+            eq(documents.docType, "SELFIE"),
+            eq(documents.approved, false),
+            isNotNull(documents.faceMatchScore),
+          ),
+        ),
+    );
+    return rows[0]?.count ?? 0;
+  }
+
+  private async recordSelfie(
+    documentId: string,
+    outcome: { refused: boolean; score?: number },
+  ): Promise<void> {
+    await withContext(this.db, { role: "system" }, (tx) =>
+      tx
+        .update(documents)
+        .set({
+          ...(outcome.score === undefined ? {} : { faceMatchScore: String(outcome.score) }),
+          /** No reviewer is named: this refusal is the system's, not a person's. */
+          ...(outcome.refused ? { approved: false } : {}),
+        })
+        .where(eq(documents.id, documentId)),
+    );
   }
 
   /**
@@ -1658,6 +1871,34 @@ export class KycService {
       throw this.vendorFailure(error, "We could not check that verification just now.");
     }
 
+    /**
+     * A hosted Aadhaar is one step of three, so it is recorded, not decided.
+     *
+     * This used to hand the result straight to `decideAndApply`, which ran
+     * `decideKyc()` on an Aadhaar alone — and a FULL verification with no PAN
+     * and no selfie decides MANUAL_REVIEW, PAN_MISSING, SELFIE_MISSING, every
+     * time. The person was then sent on to enter a PAN and take a selfie for a
+     * case that had already been decided without them, and `decideFromSteps`
+     * could not re-decide it, because MANUAL_REVIEW to MANUAL_REVIEW is not a
+     * move.
+     *
+     * So a successful return is stored exactly as the OTP route stores its
+     * result — reference token, UIDAI name and date, photograph — and the
+     * decision waits for the PAN, the same as it does there. A failed one is
+     * still decided here: there is nothing to continue with.
+     */
+    if (this.provider.aadhaarRoute === "HOSTED" && result.aadhaar?.status === "SUCCESS") {
+      await this.rememberAadhaar(userId, {
+        last4: result.aadhaar.last4,
+        refToken: result.aadhaar.refToken,
+        name: result.aadhaar.nameOnRecord,
+        dob: result.aadhaar.dateOfBirth,
+        photoKey: await this.storeAadhaarPhoto(userId, result.aadhaar.photo),
+      });
+
+      return { status: "IN_PROGRESS", reasonCodes: [] };
+    }
+
     const status = await this.decideAndApply(result);
 
     const after = await withContext(this.db, { role: "system" }, (tx) =>
@@ -1701,4 +1942,19 @@ export class KycService {
   private blindIndexKey(): Buffer {
     return Buffer.from(this.config.KYC_BLIND_INDEX_KEY, "base64");
   }
+}
+
+/**
+ * A selfie that counts: scanned CLEAN and not refused.
+ *
+ * `approved = false` is how a selfie that failed the face check is marked, so
+ * it is excluded — otherwise the stranger's photo that was just refused would
+ * satisfy the SELFIE step on its own.
+ */
+function acceptedSelfie() {
+  return and(
+    eq(documents.docType, "SELFIE"),
+    eq(documents.scanStatus, "CLEAN"),
+    or(isNull(documents.approved), eq(documents.approved, true)),
+  );
 }

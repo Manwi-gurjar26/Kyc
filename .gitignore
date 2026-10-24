@@ -19,6 +19,10 @@ apps/*/.kwx-bucket/
 .walk/
 *.log
 
+# The face models the selfie check runs on. 38 MB of binary that every clone
+# would carry for ever; `pnpm face:models` fetches and checksums them instead.
+packages/integrations/models/
+
 # The Sandbox support ticket. Kept on disk because it is still being used,
 # ignored because this repository is public and it carries account detail —
 # the live API key's prefix, transaction ids, and the shape of the vendor

@@ -156,14 +156,23 @@ export async function startSelfieUpload(input: {
 export async function confirmSelfie(input: {
   storageKey: string;
   sha256: string;
-}): Promise<Failure & { scanStatus?: string }> {
+}): Promise<Failure & { scanStatus?: string; faceCheck?: string }> {
   try {
-    const confirmed = await api<{ scanStatus?: string }>("/v1/documents/confirm", {
-      method: "POST",
-      body: { storageKey: input.storageKey, sha256: input.sha256 },
-    });
+    const confirmed = await api<{ scanStatus?: string; faceCheck?: string }>(
+      "/v1/documents/confirm",
+      {
+        method: "POST",
+        body: { storageKey: input.storageKey, sha256: input.sha256 },
+      },
+    );
 
-    return { scanStatus: confirmed.scanStatus };
+    /**
+     * A face that does not match the Aadhaar photograph comes back as an
+     * error (FACE_MISMATCH, SELFIE_NO_FACE, SELFIE_SEVERAL_FACES), with a
+     * message written for the person. `faceCheck` is only what happened to a
+     * selfie that was accepted.
+     */
+    return { scanStatus: confirmed.scanStatus, faceCheck: confirmed.faceCheck };
   } catch (error) {
     return failure(error);
   }

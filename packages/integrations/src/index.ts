@@ -102,6 +102,16 @@ export {
 export { FakeKybProvider } from "./fakeKybProvider.js";
 
 export {
+  DEFAULT_FACE_MODEL_DIR,
+  FACE_CLEAR_MISMATCH,
+  OnnxFaceMatcher,
+  SFACE_SAME_PERSON_COSINE,
+  calibrate,
+  type FaceComparison,
+  type FaceMatcher,
+} from "./faceMatcher.js";
+
+export {
   FakeKycProvider,
   type FakeKycProviderOptions,
   type FakeWebhook,

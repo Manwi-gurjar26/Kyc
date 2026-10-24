@@ -417,6 +417,16 @@ export const documents = pgTable(
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     approved: boolean("approved"),
 
+    /**
+     * SELFIE only: how this photograph scored against the Aadhaar one, 0..1.
+     *
+     * On the document rather than the KYC record because each retake is its
+     * own document — a refused selfie keeps its score, which is how the
+     * attempts are counted and how a reviewer sees what was tried. Null when
+     * nothing was compared.
+     */
+    faceMatchScore: numeric("face_match_score", { precision: 4, scale: 3 }),
+
     /** 7 years, per the retention policy. Legal to confirm. */
     retentionUntil: timestamp("retention_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

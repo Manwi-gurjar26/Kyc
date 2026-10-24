@@ -151,6 +151,7 @@ describe("collecting the result", () => {
   function provider(status: string, document: unknown = PROFILE) {
     return new SandboxDigiLockerProvider({
       ...OPTIONS,
+      warn: () => {},
       clock: () => new Date("2026-10-21T10:00:00Z"),
       client: clientFor({ "/status": { id: "sess_1", status }, "/user/profile": document }),
     });
@@ -167,17 +168,90 @@ describe("collecting the result", () => {
   });
 
   /**
-   * There is no number to keep four digits of.
+   * Without the issued document there is no number to keep four digits of.
    *
    * Confirmed against a real session: the profile carries a name, a date of
    * birth, a gender and a mobile, and no Aadhaar number in any form. This is
    * asserted rather than left implicit because `remainingSteps` used to
    * decide the Aadhaar step was done by looking at exactly this field.
    */
-  test("no last four is available from DigiLocker at all", async () => {
-    const result = await provider("succeeded").fetchResult("sess_1");
+  test("no document means no last four and no photograph, and still a pass", async () => {
+    const warnings: string[] = [];
+    const result = await new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      warn: (line) => warnings.push(line),
+      client: clientFor({ "/status": { id: "sess_1", status: "succeeded" }, "/user/profile": PROFILE }),
+    }).fetchResult("sess_1");
+
     expect(result.aadhaar?.last4).toBeUndefined();
+    expect(result.aadhaar?.photo).toBeUndefined();
     expect(result.aadhaar?.status).toBe("SUCCESS");
+    /** Lost quietly would mean nobody learns why every selfie went to review. */
+    expect(warnings.join("\n")).toMatch(/could not fetch the Aadhaar document/);
+  });
+
+  /** Their published sample, trimmed to the parts we read. */
+  const AADHAAR_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Certificate><CertificateData>
+  <KycRes code="x" ret="Y" ts="2026-01-15T12:00:00.000+05:30" txn="UKC:x">
+    <UidData tkn="" uid="xxxxxxxx1234">
+      <Poi dob="01-01-1990" gender="M" name="SAMPLE NAME"/>
+      <Pht>/9j/4AAQ
+SkZJRg==</Pht>
+    </UidData>
+  </KycRes>
+</CertificateData></Certificate>`;
+
+  const DOCUMENT = {
+    files: [
+      {
+        "@entity": "org.quicko.drive.file",
+        url: "https://in-co-sandbox-kyc-digilocker.s3.ap-south-1.amazonaws.com/x/in.gov.uidai-ADHAR.xml?X-Amz-Expires=3600",
+        size: 16598,
+        metadata: { ContentType: "application/xml", issuer_id: "in.gov.uidai" },
+      },
+    ],
+  };
+
+  test("the photograph and last four come from the issued Aadhaar XML", async () => {
+    const fetched: string[] = [];
+    const result = await new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      client: clientFor({
+        "/status": { id: "sess_1", status: "succeeded" },
+        "/user/profile": PROFILE,
+        "/documents/aadhaar": DOCUMENT,
+      }),
+      download: async (url) => {
+        fetched.push(url);
+        return AADHAAR_XML;
+      },
+    }).fetchResult("sess_1");
+
+    expect(fetched).toEqual([DOCUMENT.files[0]!.url]);
+    /** Line breaks inside the base64 are dropped, as XML wraps long text. */
+    expect(result.aadhaar?.photo).toBe("/9j/4AAQSkZJRg==");
+    expect(result.aadhaar?.last4).toBe("1234");
+    /** The name still comes from the profile, not the XML. */
+    expect(result.aadhaar?.nameOnRecord).toBe("Ramesh Kumar Sharma");
+  });
+
+  test("a failed download loses the photograph, not the verification", async () => {
+    const result = await new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      warn: () => {},
+      client: clientFor({
+        "/status": { id: "sess_1", status: "succeeded" },
+        "/user/profile": PROFILE,
+        "/documents/aadhaar": DOCUMENT,
+      }),
+      download: async () => {
+        throw new Error("document download returned HTTP 403");
+      },
+    }).fetchResult("sess_1");
+
+    expect(result.aadhaar?.status).toBe("SUCCESS");
+    expect(result.aadhaar?.photo).toBeUndefined();
   });
 
   /**

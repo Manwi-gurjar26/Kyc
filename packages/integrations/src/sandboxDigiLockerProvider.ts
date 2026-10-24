@@ -49,7 +49,18 @@ const ROUTES = {
    * is the parsed form and is what an AadhaarResult actually needs.
    */
   profile: (id: string) => `/kyc/digilocker/sessions/${id}/user/profile`,
+  /**
+   * The issued Aadhaar itself: a short-lived S3 link to UIDAI's signed XML.
+   *
+   * Fetched for the one thing the profile lacks — the photograph, which is
+   * what a selfie is compared against. The same XML also carries the masked
+   * number, so this is where the last four come from too.
+   */
+  document: (id: string) => `/kyc/digilocker/sessions/${id}/documents/aadhaar`,
 } as const;
+
+/** The S3 link is good for an hour; a download that takes longer is dead. */
+const DOCUMENT_TIMEOUT_MS = 15_000;
 
 /**
  * How long a session is worth chasing when the gateway does not say.
@@ -69,6 +80,10 @@ export interface SandboxDigiLockerOptions {
   clock?: () => Date;
   /** Shared so one access token serves every Sandbox adapter in the process. */
   client?: SandboxClient;
+  /** Downloads the issued document. Injected by tests; `fetch` otherwise. */
+  download?: (url: string) => Promise<string>;
+  /** Where a lost photograph is reported. It never fails the verification. */
+  warn?: (line: string) => void;
 }
 
 export class SandboxDigiLockerProvider implements KycProvider {
@@ -82,10 +97,14 @@ export class SandboxDigiLockerProvider implements KycProvider {
 
   private readonly client: SandboxClient;
   private readonly clock: () => Date;
+  private readonly download: (url: string) => Promise<string>;
+  private readonly warn: (line: string) => void;
 
   constructor(options: SandboxDigiLockerOptions) {
     this.client = options.client ?? new SandboxClient(options);
     this.clock = options.clock ?? (() => new Date());
+    this.download = options.download ?? downloadText;
+    this.warn = options.warn ?? ((line) => console.warn(line));
   }
 
   /* ---------------------------------------------------------------- */
@@ -203,12 +222,12 @@ export class SandboxDigiLockerProvider implements KycProvider {
     }
 
     /**
-     * The user profile, not the document.
+     * The user profile, for the name and date of birth.
      *
      * Confirmed against a real session: this returns name, date_of_birth,
      * gender, mobile and email as parsed fields. What it does NOT return is
-     * an Aadhaar number in any form, or a photograph — so there is no `last4`
-     * to keep and nothing for a reviewer to compare a selfie against.
+     * an Aadhaar number in any form, or a photograph — those are in the
+     * issued document, fetched below.
      */
     const profile = await this.client.call<{
       name?: string;
@@ -220,6 +239,7 @@ export class SandboxDigiLockerProvider implements KycProvider {
     }>(ROUTES.profile(vendorSessionId), undefined, "GET");
 
     const record = profile.data;
+    const issued = await this.issuedAadhaar(vendorSessionId);
 
     return {
       vendorSessionId,
@@ -233,12 +253,14 @@ export class SandboxDigiLockerProvider implements KycProvider {
         /** They have used both spellings in published examples. */
         dateOfBirth: isoDate(record?.date_of_birth),
         /**
-         * Absent, always. DigiLocker shares the person's details and never
-         * the number, so there is nothing to take four digits from — and a
-         * fabricated four would show somebody a stranger's. `remainingSteps`
-         * must therefore key off the reference token, not this.
+         * From the issued XML's masked `uid`, when the document could be
+         * fetched; absent otherwise, never guessed — a fabricated four would
+         * show somebody a stranger's. `remainingSteps` keys off the reference
+         * token, so a missing four does not hold anybody up.
          */
-        last4: undefined,
+        last4: issued.last4,
+        /** Base64 JPEG, for the selfie comparison. Absent when unavailable. */
+        photo: issued.photo,
         /**
          * The session id is what we quote back when asked what we checked.
          * It is not derived from the Aadhaar number, because we never see one.
@@ -248,6 +270,47 @@ export class SandboxDigiLockerProvider implements KycProvider {
       rawResponseKey: `kyc-docs/raw/${vendorSessionId}.json`,
       completedAt: this.clock(),
     };
+  }
+
+  /**
+   * The photograph and masked number from the issued Aadhaar XML.
+   *
+   * Never throws. The person has already verified at DigiLocker and the
+   * profile is in hand; losing the photograph costs an automatic face match,
+   * which then falls to a reviewer — a worse check, not a wrong one. Failing
+   * here instead would throw away a completed verification over a download.
+   */
+  private async issuedAadhaar(
+    vendorSessionId: string,
+  ): Promise<{ photo?: string; last4?: string }> {
+    try {
+      const body = await this.client.call<{
+        files?: { url?: string; metadata?: { ContentType?: string } }[];
+      }>(ROUTES.document(vendorSessionId), undefined, "GET");
+
+      const files = body.data?.files ?? [];
+      const file =
+        files.find((f) => /xml/i.test(f.metadata?.ContentType ?? "")) ?? files[0];
+
+      if (!file?.url) {
+        this.warn(`DigiLocker session ${vendorSessionId}: no Aadhaar file was shared.`);
+        return {};
+      }
+
+      const issued = readAadhaarXml(await this.download(file.url));
+      if (!issued.photo) {
+        this.warn(`DigiLocker session ${vendorSessionId}: the Aadhaar XML had no photograph.`);
+      }
+      return issued;
+    } catch (error) {
+      this.warn(
+        `DigiLocker session ${vendorSessionId}: could not fetch the Aadhaar document — ` +
+          `the selfie will go to a reviewer instead of being matched. ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+      return {};
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -290,4 +353,35 @@ function lastFourOf(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const digits = value.replace(/\D/g, "");
   return digits.length >= 4 ? digits.slice(-4) : undefined;
+}
+
+/**
+ * Reads the two fields we use out of UIDAI's KycRes XML.
+ *
+ * Two regular expressions rather than an XML parser, because both targets are
+ * flat and fixed by UIDAI's schema — `<Pht>` holds base64 and nothing else,
+ * `uid` is an attribute on `<UidData>` — and a parser would be a dependency
+ * that reads the whole signed document to find two values in it. The
+ * signature is not verified here; the document came from DigiLocker over
+ * Sandbox's authenticated API, which is the trust we already extend to the
+ * name and date of birth.
+ */
+export function readAadhaarXml(xml: string): { photo?: string; last4?: string } {
+  const photo = /<Pht>\s*([A-Za-z0-9+/=\s]+?)\s*<\/Pht>/.exec(xml)?.[1]?.replace(/\s+/g, "");
+  const uid = /<UidData\b[^>]*\buid="([^"]*)"/.exec(xml)?.[1];
+
+  return {
+    photo: photo && photo.length > 0 ? photo : undefined,
+    last4: lastFourOf(uid),
+  };
+}
+
+/** Plain HTTPS GET of the pre-signed link. No credentials go with it. */
+async function downloadText(url: string): Promise<string> {
+  if (!url.startsWith("https://")) {
+    throw new Error("the document link is not HTTPS");
+  }
+  const response = await fetch(url, { signal: AbortSignal.timeout(DOCUMENT_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`document download returned HTTP ${response.status}`);
+  return response.text();
 }

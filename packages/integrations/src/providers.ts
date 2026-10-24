@@ -141,6 +141,12 @@ export interface VendorKycResult {
     last4?: string;
     /** The vendor's opaque handle for the verified identity. */
     refToken?: string;
+    /**
+     * The UIDAI photograph as base64 JPEG, for the selfie comparison.
+     * Passed through, never stored by the adapter — the caller puts it in the
+     * object store, the same as the OTP route's photo.
+     */
+    photo?: string;
   };
   pan?: PanResult & {
     /** Returned so we can encrypt and blind-index it. Never logged. */

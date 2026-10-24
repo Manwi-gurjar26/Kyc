@@ -28,6 +28,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { ApiError } from "../common/errors.js";
 import { DI, type AppConfig } from "../config.js";
+import type { SelfieCheck } from "../kyc/kyc.service.js";
 
 /**
  * Uploading, viewing and reviewing documents.
@@ -60,6 +61,13 @@ export class DocumentsService {
      */
     @Inject(DI.VERIFIED_NAME_LOOKUP)
     private readonly verifiedNameOf: (userId: string) => Promise<string | null>,
+    /** The same narrowing, for comparing a selfie with the Aadhaar photograph. */
+    @Inject(DI.SELFIE_CHECK)
+    private readonly checkSelfie: (
+      userId: string,
+      documentId: string,
+      storageKey: string,
+    ) => Promise<SelfieCheck>,
   ) {}
 
   private readonly logger = new Logger(DocumentsService.name);
@@ -222,12 +230,25 @@ export class DocumentsService {
       }
     }
 
+    /**
+     * A selfie is compared with the Aadhaar photograph as soon as it is known
+     * to be clean. A refusal throws from here with a reason the person can act
+     * on — a different face, no face, two faces — while they are still on the
+     * camera screen, rather than surfacing days later as a reviewer's verdict.
+     */
+    const faceCheck =
+      outcome.scanStatus === "CLEAN" && docType === "SELFIE"
+        ? await this.checkSelfie(userId, outcome.documentId, input.storageKey)
+        : undefined;
+
     const fields = await this.fieldsOf(userId, outcome.documentId);
 
     return {
       landParcelId,
       documentId: outcome.documentId,
       scanStatus: outcome.scanStatus,
+      /** SELFIE only. Never a decision — `decideKyc` still makes that. */
+      faceCheck: faceCheck?.outcome,
       lowConfidenceFieldCount: outcome.lowConfidenceFieldCount,
       needsManualReview: outcome.needsManualReview,
       /**

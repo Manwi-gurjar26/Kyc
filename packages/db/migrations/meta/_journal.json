@@ -92,6 +92,13 @@
       "when": 1792300000000,
       "tag": "0012_aadhaar_photo_for_review",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792350000000,
+      "tag": "0013_selfie_face_match",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import {
   FakeKybProvider,
   FakeKycProvider,
   LocalDiskBucket,
+  OnnxFaceMatcher,
   ReplayGuard,
   SandboxClient,
   SandboxKybProvider,
@@ -13,12 +14,13 @@ import {
   SignedUrlFileStore,
   type DocumentExtractor,
   type DocumentScanner,
+  type FaceMatcher,
   type FileStore,
   type KybProvider,
   type KycProvider,
 } from "@kilowattx/integrations";
 import { PlaceholderPanEncryptor } from "@kilowattx/kyc-pipeline";
-import { Module, type DynamicModule, type Provider } from "@nestjs/common";
+import { Logger, Module, type DynamicModule, type Provider } from "@nestjs/common";
 import { AdminController } from "./admin/admin.controller.js";
 import { AdminService } from "./admin/admin.service.js";
 import {
@@ -71,6 +73,29 @@ export interface AppModuleOptions {
   fileStore?: FileStore;
   documentScanner?: DocumentScanner;
   documentExtractor?: DocumentExtractor;
+  /** Null to run with no matcher, as a machine without the models does. */
+  faceMatcher?: FaceMatcher | null;
+}
+
+/**
+ * The face matcher, or null when its models are not on this machine.
+ *
+ * Null rather than a refusal to boot: without a matcher the selfie is stored
+ * unscored and the case goes to a reviewer, which is the behaviour this
+ * system had before it could match faces at all — slower, never unsafe. Said
+ * loudly at boot, because a deployment quietly sending every selfie to review
+ * is the kind of thing nobody notices for a month.
+ */
+function buildFaceMatcher(config: AppConfig): FaceMatcher | null {
+  const modelDir = config.FACE_MODEL_DIR;
+  if (!OnnxFaceMatcher.modelsPresent(modelDir)) {
+    console.warn(
+      "[face] No face models found — selfies will be stored unscored and sent to a reviewer. " +
+        "Run `pnpm face:models` to enable the automatic match.",
+    );
+    return null;
+  }
+  return new OnnxFaceMatcher({ modelDir });
 }
 
 /**
@@ -162,6 +187,7 @@ function buildKycProvider(
         nodeEnv: config.NODE_ENV,
         webhookSecret: config.KYC_WEBHOOK_SECRET,
         client,
+        warn: (line) => new Logger("DigiLocker").warn(line),
       });
 
     case "cashfree":
@@ -351,6 +377,21 @@ export class AppModule {
         provide: DI.VERIFIED_NAME_LOOKUP,
         useFactory: (kyc: KycService) => (userId: string) =>
           kyc.displayNameFor(userId),
+        inject: [KycService],
+      },
+      {
+        provide: DI.FACE_MATCHER,
+        useValue:
+          options.faceMatcher === undefined
+            ? buildFaceMatcher(options.config)
+            : options.faceMatcher,
+      },
+      {
+        /** The selfie port, narrowed for the same reason as the one above. */
+        provide: DI.SELFIE_CHECK,
+        useFactory: (kyc: KycService) =>
+          (userId: string, documentId: string, storageKey: string) =>
+            kyc.checkSelfie(userId, documentId, storageKey),
         inject: [KycService],
       },
       { provide: DI.CLOCK, useValue: options.clock ?? (() => new Date()) },

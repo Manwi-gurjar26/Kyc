@@ -39,7 +39,14 @@ export interface PanResult {
 }
 
 export interface SelfieResult {
-  livenessPassed: boolean;
+  /**
+   * Undefined when no liveness check was run at all.
+   *
+   * Not the same as false. Our own face matcher compares the selfie with the
+   * Aadhaar photograph and has no liveness model, so the honest answer is
+   * "not checked" — recorded as a flag, never filled in as a pass.
+   */
+  livenessPassed?: boolean;
   /** 0..1, against the Aadhaar photo. */
   faceMatchScore: number;
 }
@@ -299,10 +306,22 @@ export function decideKyc(
         review("SELFIE_MISSING", "No selfie result was recorded for a FULL verification.");
       }
     } else {
-      if (!input.selfie.livenessPassed) {
+      if (input.selfie.livenessPassed === false) {
         review(
           "LIVENESS_FAILED",
           "The liveness check did not pass. After three attempts a cool-off and a fraud flag apply.",
+        );
+      } else if (input.selfie.livenessPassed === undefined) {
+        /**
+         * A flag, not a review: the face was matched against the Aadhaar
+         * photograph, which is the check that stops somebody using a
+         * stranger's face. What was not checked is whether the face was a
+         * live person rather than a printed photo of the right one, and the
+         * record says so for anybody reading it later.
+         */
+        flag(
+          "LIVENESS_NOT_CHECKED",
+          "The selfie was matched against the Aadhaar photograph, but no liveness check was run — a photograph of the right person would also have matched.",
         );
       }
       if (input.selfie.faceMatchScore < thresholds.faceMatch) {

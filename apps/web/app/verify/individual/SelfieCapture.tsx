@@ -6,12 +6,15 @@ import { confirmSelfie, startSelfieUpload } from "../actions";
 /**
  * Takes a selfie and uploads it.
  *
- * What this is NOT is a liveness check. The verification gateway this system
- * runs on sells no liveness test and no face match, so nothing here scores
- * anything: the photograph is collected, virus-scanned and stored, and a
- * reviewer compares it against the Aadhaar photograph by eye. The copy says
- * exactly that, because the version it replaces promised "a two-second check
- * that you are a live person" over a button that only set a boolean.
+ * The server compares it with the Aadhaar photograph as soon as it arrives. A
+ * different face, no face, or two faces comes back as an error with a reason,
+ * and the person simply takes another — after three clear mismatches the
+ * photo is kept and a person reviews it instead.
+ *
+ * What this is NOT is a liveness check: a face match only says the face is
+ * the one on the Aadhaar. The copy says exactly that much and no more, because
+ * an earlier version promised "a two-second check that you are a live person"
+ * over a button that only set a boolean.
  *
  * The bytes go from the browser to the signed URL directly. They do not pass
  * through the server actions — those mint the URL and record the arrival,
@@ -31,6 +34,8 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
 
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+  /** What the server made of an accepted selfie: MATCHED, REVIEW or UNCHECKED. */
+  const [faceCheck, setFaceCheck] = useState<string | undefined>(undefined);
   const [cameraRefused, setCameraRefused] = useState(false);
   /**
    * Whether the stream has produced a frame yet.
@@ -214,6 +219,7 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
       return;
     }
 
+    setFaceCheck(confirmed.faceCheck);
     setStage("done");
     onDone();
   }
@@ -247,7 +253,7 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
     <div className="frow">
       <div className="frow-top">
         <label htmlFor="selfie">Your photo</label>
-        <span className="tag">Checked by a person</span>
+        <span className="tag">Matched with your Aadhaar photo</span>
       </div>
 
       {stage === "live" && (
@@ -286,15 +292,19 @@ export function SelfieCapture({ onDone }: { onDone: () => void }) {
           <div>
             <div className="st">
               {stage === "done"
-                ? "Photo received"
+                ? faceCheck === "MATCHED"
+                  ? "Photo matches your Aadhaar"
+                  : "Photo received"
                 : stage === "uploading"
-                  ? "Sending your photo…"
+                  ? "Checking your photo…"
                   : "Take a photo of yourself"}
             </div>
             <div className="ss">
               {stage === "done"
-                ? "A reviewer will compare it with your Aadhaar photo"
-                : "We do not score it automatically — a person compares it with your Aadhaar photo"}
+                ? faceCheck === "MATCHED"
+                  ? "Your face matches the photo on your Aadhaar"
+                  : "A reviewer will compare it with your Aadhaar photo"
+                : "We compare it with the photo on your Aadhaar"}
             </div>
           </div>
 
