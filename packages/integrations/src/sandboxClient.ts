@@ -1,4 +1,9 @@
-import { VendorError, VendorRequestError, VendorTimeoutError } from "./providers.js";
+import {
+  VendorAccountError,
+  VendorError,
+  VendorRequestError,
+  VendorTimeoutError,
+} from "./providers.js";
 
 /**
  * The transport shared by every Sandbox (sandbox.co.in) adapter.
@@ -80,6 +85,18 @@ function reference(body: { transaction_id?: string }): string {
   return body.transaction_id ? ` [transaction_id: ${body.transaction_id}]` : "";
 }
 
+/**
+ * The wallet behind our key is empty.
+ *
+ * Matched on the message as well as 402, because the refusal seen in practice
+ * was the text "Insufficient credits" and its status was not recorded. Either
+ * one is enough: a billing refusal read as the person's input is the bug this
+ * exists to prevent.
+ */
+function isOutOfCredits(status: number, message: string | undefined): boolean {
+  return status === 402 || /insufficient\s+(credits?|balance|funds)/i.test(message ?? "");
+}
+
 /** The shape every response from this gateway is wrapped in. */
 export interface Envelope<T> {
   code: number;
@@ -134,10 +151,11 @@ export class SandboxClient {
   /**
    * One authenticated request, with the token fetched or reused.
    *
-   * Every failure mode is turned into one of our two vendor errors, because
-   * the difference matters upstream: a VendorRequestError is the gateway
-   * saying the input was wrong and is shown to the person, where a timeout is
-   * ours to retry and must never be reported as a failed check.
+   * Every failure mode is turned into one of our vendor errors, because the
+   * difference matters upstream: a VendorRequestError is the gateway saying
+   * the input was wrong and is shown to the person, where a timeout is ours to
+   * retry and an empty wallet (VendorAccountError) is ours to fix — neither
+   * may ever be reported as a failed check.
    */
   async call<T>(
     path: string,
@@ -191,6 +209,22 @@ export class SandboxClient {
         `The verification gateway returned something that is not JSON (HTTP ${response.status}).`,
         this.name,
         true,
+      );
+    }
+
+    /**
+     * Checked before either status range: whatever code an empty wallet comes
+     * back with, retrying will not fill it and the person's input was never
+     * looked at.
+     */
+    if (isOutOfCredits(response.status, body.message)) {
+      throw new VendorAccountError(
+        this.name,
+        `The verification gateway refused the call for want of credits (HTTP ${response.status})` +
+          (body.message ? `: ${body.message}` : "") +
+          reference(body) +
+          ". Top up the Sandbox wallet.",
+        response.status,
       );
     }
 
@@ -262,7 +296,7 @@ export class SandboxClient {
       const body = (await response.json()) as Envelope<{ access_token: string }>;
 
       if (!response.ok || !body.data?.access_token) {
-        throw new VendorRequestError(
+        throw new VendorAccountError(
           this.name,
           "The verification gateway rejected our credentials. Check the API key and secret.",
           response.status,
@@ -282,7 +316,7 @@ export class SandboxClient {
 
       return this.token.value;
     } catch (error) {
-      if (error instanceof VendorRequestError) throw error;
+      if (error instanceof VendorAccountError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
         throw new VendorTimeoutError(this.name, REQUEST_TIMEOUT_MS);
       }

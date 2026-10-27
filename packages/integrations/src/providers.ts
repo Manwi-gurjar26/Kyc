@@ -52,6 +52,22 @@ export class VendorRequestError extends VendorError {
   }
 }
 
+/**
+ * Our account with the vendor cannot make the call — out of credits, or our
+ * credentials refused. Not retryable, and NOT a VendorRequestError: nothing
+ * about the person's input was judged, so their screen must not say it was.
+ *
+ * It was a VendorRequestError, and the gateway's "Insufficient credits" went
+ * straight onto a customer's PAN step as though their PAN had failed, with no
+ * log line for whoever has to top the wallet up.
+ */
+export class VendorAccountError extends VendorError {
+  constructor(vendor: string, message: string, readonly statusCode?: number) {
+    super(message, vendor, false);
+    this.name = "VendorAccountError";
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* KYC: Aadhaar, PAN, selfie                                          */
 /* ------------------------------------------------------------------ */

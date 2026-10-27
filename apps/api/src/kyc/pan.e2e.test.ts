@@ -1,4 +1,5 @@
 import { createClient, type DatabaseHandle } from "@kilowattx/db";
+import { VendorAccountError, type KybProvider } from "@kilowattx/integrations";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
@@ -373,5 +374,64 @@ describe("what is stored", () => {
     for (const value of Object.values(row)) {
       if (typeof value === "string") expect(value).not.toContain(AADHAAR);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * The gateway refusing us, not the PAN.
+ *
+ * Sandbox answered a live PAN check with "Insufficient credits", and that text
+ * went onto the customer's screen as PAN_CHECK_FAILED — as though their PAN
+ * had failed — while nothing was logged for whoever tops the wallet up.
+ */
+describe("when our gateway account cannot make the call", () => {
+  let broke: NestExpressApplication;
+
+  beforeAll(async () => {
+    const outOfCredits = async (): Promise<never> => {
+      throw new VendorAccountError(
+        "sandbox",
+        "The verification gateway refused the call for want of credits (HTTP 403): Insufficient credits",
+        403,
+      );
+    };
+    const kybProvider: KybProvider = {
+      name: "sandbox",
+      verifyPan: outOfCredits,
+      lookupGstin: outOfCredits,
+      lookupCin: outOfCredits,
+    };
+
+    broke = await createApp({
+      config: loadConfig({
+        NODE_ENV: "test",
+        DATABASE_URL: DB_URL,
+        KYC_PROVIDER: "fake",
+        KYC_WEBHOOK_SECRET: "whsec_pan_e2e_0000000000",
+        KYC_BLIND_INDEX_KEY: Buffer.alloc(32, 43).toString("base64"),
+        FILE_SIGNING_SECRET: "filesign_pan_e2e_000000000",
+      } as NodeJS.ProcessEnv),
+      kybProvider,
+    });
+    await broke.init();
+  });
+
+  afterAll(async () => {
+    await broke.close();
+  });
+
+  test("the person is told to try again, not that their PAN failed", async () => {
+    const userId = await verifiedAadhaar();
+
+    const response = await request(broke.getHttpServer())
+      .post("/v1/kyc/pan")
+      .set(as(userId))
+      .send({ pan: somePan() })
+      .expect(400);
+
+    expect(response.body.code).toBe("PAN_UNAVAILABLE");
+    expect(response.body.message).not.toMatch(/credit/i);
   });
 });

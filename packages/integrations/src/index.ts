@@ -27,6 +27,7 @@ export {
 export {
   FAKE_SCENARIOS,
   KYC_PROVIDERS,
+  VendorAccountError,
   VendorError,
   VendorRequestError,
   VendorTimeoutError,
