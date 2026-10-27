@@ -95,6 +95,9 @@ export async function applyVendorResult(
       vendorVersion: result.vendorVersion,
       aadhaarLast4: result.aadhaar?.last4,
       aadhaarRefToken: result.aadhaar?.refToken,
+      /** What the PAN check matches against. Never what the subject typed. */
+      aadhaarName: result.aadhaar?.nameOnRecord,
+      aadhaarDob: result.aadhaar?.dateOfBirth,
       panEncrypted: pan ? await encryptor.encrypt(pan) : undefined,
       panBlindIndex: blindIndex,
       panLast4: pan?.slice(-4),
@@ -174,10 +177,13 @@ function buildChecks(
   }
 
   if (result.selfie) {
-    checks.push({
-      checkType: "LIVENESS",
-      status: result.selfie.livenessPassed ? "PASSED" : "FAILED",
-    });
+    /** No row for a liveness check nobody ran: absent is not FAILED. */
+    if (result.selfie.livenessPassed !== undefined) {
+      checks.push({
+        checkType: "LIVENESS",
+        status: result.selfie.livenessPassed ? "PASSED" : "FAILED",
+      });
+    }
     checks.push({
       checkType: "FACE_MATCH",
       status:

@@ -5,19 +5,22 @@ import {
   FakeKybProvider,
   FakeKycProvider,
   LocalDiskBucket,
+  OnnxFaceMatcher,
   ReplayGuard,
   SandboxClient,
   SandboxKybProvider,
+  SandboxDigiLockerProvider,
   SandboxKycProvider,
   SignedUrlFileStore,
   type DocumentExtractor,
   type DocumentScanner,
+  type FaceMatcher,
   type FileStore,
   type KybProvider,
   type KycProvider,
 } from "@kilowattx/integrations";
 import { PlaceholderPanEncryptor } from "@kilowattx/kyc-pipeline";
-import { Module, type DynamicModule, type Provider } from "@nestjs/common";
+import { Logger, Module, type DynamicModule, type Provider } from "@nestjs/common";
 import { AdminController } from "./admin/admin.controller.js";
 import { AdminService } from "./admin/admin.service.js";
 import {
@@ -36,6 +39,7 @@ import { DI, type AppConfig } from "./config.js";
 import { DatabaseLifecycle } from "./common/databaseLifecycle.js";
 import { StaffGuard } from "./common/staffGuard.js";
 import { SessionGuard } from "./common/session.js";
+import { DevEnvironmentController } from "./kyc/devEnvironment.controller.js";
 import { DevUsersController } from "./kyc/devUsers.controller.js";
 import { DevVendorController } from "./kyc/devVendor.controller.js";
 import { KybController } from "./kyb/kyb.controller.js";
@@ -70,6 +74,29 @@ export interface AppModuleOptions {
   fileStore?: FileStore;
   documentScanner?: DocumentScanner;
   documentExtractor?: DocumentExtractor;
+  /** Null to run with no matcher, as a machine without the models does. */
+  faceMatcher?: FaceMatcher | null;
+}
+
+/**
+ * The face matcher, or null when its models are not on this machine.
+ *
+ * Null rather than a refusal to boot: without a matcher the selfie is stored
+ * unscored and the case goes to a reviewer, which is the behaviour this
+ * system had before it could match faces at all — slower, never unsafe. Said
+ * loudly at boot, because a deployment quietly sending every selfie to review
+ * is the kind of thing nobody notices for a month.
+ */
+function buildFaceMatcher(config: AppConfig): FaceMatcher | null {
+  const modelDir = config.FACE_MODEL_DIR;
+  if (!OnnxFaceMatcher.modelsPresent(modelDir)) {
+    console.warn(
+      "[face] No face models found — selfies will be stored unscored and sent to a reviewer. " +
+        "Run `pnpm face:models` to enable the automatic match.",
+    );
+    return null;
+  }
+  return new OnnxFaceMatcher({ modelDir });
 }
 
 /**
@@ -82,7 +109,14 @@ export interface AppModuleOptions {
  * fake.
  */
 function buildSandboxClient(config: AppConfig): SandboxClient | null {
-  if (config.KYC_PROVIDER !== "sandbox") return null;
+  /**
+   * Built for both Sandbox routes. DigiLocker is the same vendor on the same
+   * key — only the Aadhaar flow differs — so it shares the access token with
+   * the KYB adapter exactly as OKYC did.
+   */
+  if (config.KYC_PROVIDER !== "sandbox" && config.KYC_PROVIDER !== "digilocker") {
+    return null;
+  }
 
   return new SandboxClient({
     apiKey: config.KYC_VENDOR_CLIENT_ID!,
@@ -99,6 +133,12 @@ function buildKycProvider(
     case "fake":
       return new FakeKycProvider({
         webhookSecret: config.KYC_WEBHOOK_SECRET,
+        /**
+         * Development only: which Aadhaar journey the fake pretends to be.
+         * Lets the hosted screens be walked without the gateway. Defaults to
+         * OTP, which is what every existing test expects.
+         */
+        aadhaarRoute: process.env.FAKE_AADHAAR_ROUTE === "HOSTED" ? "HOSTED" : "OTP",
       });
 
     /*
@@ -126,6 +166,29 @@ function buildKycProvider(
         nodeEnv: config.NODE_ENV,
         webhookSecret: config.KYC_WEBHOOK_SECRET,
         client: client ?? undefined,
+      });
+
+    /**
+     * The replacement Aadhaar route.
+     *
+     * A hosted flow: the person authenticates at DigiLocker, on the
+     * government's own site, and the Aadhaar number never reaches us. See
+     * docs/superpowers/specs/2026-10-21-digilocker-migration-design.md.
+     */
+    case "digilocker":
+      if (!client) {
+        throw new Error(
+          "KYC_PROVIDER=digilocker selected but no Sandbox client was built. " +
+            "This is a wiring mistake in app.module, not a configuration one.",
+        );
+      }
+      return new SandboxDigiLockerProvider({
+        apiKey: config.KYC_VENDOR_CLIENT_ID!,
+        apiSecret: config.KYC_VENDOR_CLIENT_SECRET!,
+        nodeEnv: config.NODE_ENV,
+        webhookSecret: config.KYC_WEBHOOK_SECRET,
+        client,
+        warn: (line) => new Logger("DigiLocker").warn(line),
       });
 
     case "cashfree":
@@ -198,7 +261,15 @@ function buildKybProvider(
    * this adapter. That is also why the client is passed in rather than built:
    * one token serves both.
    */
-  if (config.KYC_PROVIDER === "sandbox") {
+  /**
+   * Both Sandbox routes use the same KYB adapter.
+   *
+   * DigiLocker covers Aadhaar and nothing else — PAN and GSTIN are still the
+   * ordinary Sandbox endpoints, on the same key, and neither is deprecated.
+   * Leaving digilocker out here would have thrown at boot with a message
+   * about an unimplemented KYB vendor, which is not what is wrong.
+   */
+  if (config.KYC_PROVIDER === "sandbox" || config.KYC_PROVIDER === "digilocker") {
     if (!client) {
       throw new Error(
         "KYC_PROVIDER=sandbox selected but no Sandbox client was built. " +
@@ -309,6 +380,21 @@ export class AppModule {
           kyc.displayNameFor(userId),
         inject: [KycService],
       },
+      {
+        provide: DI.FACE_MATCHER,
+        useValue:
+          options.faceMatcher === undefined
+            ? buildFaceMatcher(options.config)
+            : options.faceMatcher,
+      },
+      {
+        /** The selfie port, narrowed for the same reason as the one above. */
+        provide: DI.SELFIE_CHECK,
+        useFactory: (kyc: KycService) =>
+          (userId: string, documentId: string, storageKey: string) =>
+            kyc.checkSelfie(userId, documentId, storageKey),
+        inject: [KycService],
+      },
       { provide: DI.CLOCK, useValue: options.clock ?? (() => new Date()) },
       {
         /**
@@ -368,6 +454,7 @@ export class AppModule {
             FilesController,
             DevVendorController,
             DevUsersController,
+            DevEnvironmentController,
           ];
 
     return {

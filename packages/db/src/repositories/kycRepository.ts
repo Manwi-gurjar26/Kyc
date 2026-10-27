@@ -55,6 +55,19 @@ export interface ApplyKycDecisionInput {
   /** The only Aadhaar data we may keep. */
   aadhaarLast4?: string;
   aadhaarRefToken?: string;
+  /**
+   * The name and date of birth UIDAI returned.
+   *
+   * Written here because the PAN check needs them and they have to come from
+   * the gateway rather than from anything the subject typed. The step-by-step
+   * flow stored them from the start; this path did not, so a hosted
+   * verification completed, recorded a reference token, and left the PAN step
+   * refusing with AADHAAR_REQUIRED_FIRST — a person verified and unable to
+   * continue.
+   */
+  aadhaarName?: string;
+  /** ISO date, YYYY-MM-DD. */
+  aadhaarDob?: string;
 
   /** Envelope ciphertext; never the plaintext PAN. */
   panEncrypted?: string;
@@ -128,6 +141,8 @@ export async function applyKycDecision(
       vendorVersion: input.vendorVersion,
       aadhaarLast4: input.aadhaarLast4,
       aadhaarRefToken: input.aadhaarRefToken,
+      aadhaarName: input.aadhaarName,
+      aadhaarDob: input.aadhaarDob,
       panEncrypted: input.panEncrypted,
       panBlindIndex: input.panBlindIndex,
       panLast4: input.panLast4,

@@ -312,6 +312,30 @@ describe("decideKyc — anything unclear goes to a person", () => {
     expect(codes(decision.reasons)).toContain("LIVENESS_FAILED");
   });
 
+  /**
+   * Our own matcher scores the face against the Aadhaar photograph and has no
+   * liveness model. A good match verifies, and the record carries a flag
+   * saying liveness was never checked — it is not quietly read as a pass.
+   */
+  test("a face match with no liveness check verifies, flagged", () => {
+    const decision = decideKyc(
+      fullKyc({ selfie: { faceMatchScore: 0.93 } }),
+      DEFAULT_KYC_THRESHOLDS,
+    );
+    expect(decision.status).toBe("VERIFIED");
+    const reason = decision.reasons.find((r) => r.code === "LIVENESS_NOT_CHECKED");
+    expect(reason?.severity).toBe("FLAG");
+  });
+
+  test("a weak face match with no liveness check still goes to review", () => {
+    const decision = decideKyc(
+      fullKyc({ selfie: { faceMatchScore: 0.68 } }),
+      DEFAULT_KYC_THRESHOLDS,
+    );
+    expect(decision.status).toBe("MANUAL_REVIEW");
+    expect(codes(decision.reasons)).toContain("FACE_MATCH_LOW");
+  });
+
   test("a PAN name mismatch goes to review — marriage name changes are common", () => {
     const decision = decideKyc(
       fullKyc({
@@ -401,6 +425,61 @@ describe("decideKyc — missing checks never become a pass", () => {
     const decision = decideKyc(input, DEFAULT_KYC_THRESHOLDS);
     expect(decision.status).toBe("MANUAL_REVIEW");
     expect(codes(decision.reasons)).toContain("SELFIE_MISSING");
+  });
+
+  /**
+   * A selfie we hold but cannot score is a third state, and it needs its own
+   * reason.
+   *
+   * The gateway this system runs on sells no liveness or face-match check, so
+   * a selfie can be collected, virus-scanned and stored while nobody has
+   * compared it to anything. Reporting SELFIE_MISSING for that is false — the
+   * reviewer goes looking for a file that is sitting right there — and
+   * inventing a livenessPassed to fill the gap would auto-approve a biometric
+   * nobody checked.
+   *
+   * So it reviews, like a missing selfie, and says something different.
+   */
+  test("a selfie that was collected but not scored reviews, and says so", () => {
+    const input = fullKyc();
+    delete (input as { selfie?: unknown }).selfie;
+    const decision = decideKyc(
+      { ...input, selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).toBe("MANUAL_REVIEW");
+    expect(codes(decision.reasons)).toContain("SELFIE_NOT_SCORED");
+    expect(codes(decision.reasons)).not.toContain("SELFIE_MISSING");
+  });
+
+  /**
+   * And it must not become a pass.
+   *
+   * This is the assertion that stops the new state being a loophole: an
+   * unscored selfie is not evidence of a face match, so it can never be the
+   * thing that lets somebody through.
+   */
+  test("an unscored selfie never reaches VERIFIED", () => {
+    const input = fullKyc();
+    delete (input as { selfie?: unknown }).selfie;
+    const decision = decideKyc(
+      { ...input, selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).not.toBe("VERIFIED");
+  });
+
+  /** A real scored selfie still wins: the flag is only for the absence of one. */
+  test("a scored selfie is unaffected by the not-scored flag", () => {
+    const decision = decideKyc(
+      { ...fullKyc(), selfieCollectedButNotScored: true },
+      DEFAULT_KYC_THRESHOLDS,
+    );
+
+    expect(decision.status).toBe("VERIFIED");
+    expect(codes(decision.reasons)).not.toContain("SELFIE_NOT_SCORED");
   });
 
   test("a FULL decision without a PAN result goes to review", () => {

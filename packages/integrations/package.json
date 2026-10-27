@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@kilowattx/core": "workspace:*",
-    "@kilowattx/validation": "workspace:*"
+    "@kilowattx/validation": "workspace:*",
+    "jpeg-js": "0.4.4",
+    "onnxruntime-node": "1.30.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

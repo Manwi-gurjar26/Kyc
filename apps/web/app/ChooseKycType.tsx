@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { chooseKycType } from "./actions";
+import { chooseKycType, type ActionResult } from "./actions";
 
 /**
  * Step 1: which kind of entity is being verified.
@@ -29,7 +29,7 @@ const OPTIONS: {
     kind: "Personal & Residential",
     what: "Individual Prosumer",
     who: "For homeowners, personal land owners and retail solar subscriptions.",
-    needs: "Aadhaar OTP and PAN",
+    needs: "Aadhaar via DigiLocker, PAN and a selfie",
   },
   {
     value: "BUSINESS",
@@ -52,8 +52,13 @@ function Continue({ disabled }: { disabled: boolean }) {
 export function ChooseKycType() {
   const [entity, setEntity] = useState<Entity | null>(null);
 
+  const [result, submit] = useActionState<ActionResult | null, FormData>(
+    chooseKycType,
+    null,
+  );
+
   return (
-    <form action={chooseKycType}>
+    <form action={submit}>
       <input type="hidden" name="entity" value={entity ?? ""} />
 
       {OPTIONS.map((option) => (
@@ -81,6 +86,12 @@ export function ChooseKycType() {
         option. A pre-selected entity is a guess that silently decides which
         documents somebody is about to be asked for.
       */}
+      {result?.error ? (
+        <div className="alert" role="alert">
+          <strong>{result.error.code}</strong> — {result.error.message}
+        </div>
+      ) : null}
+
       <Continue disabled={entity === null} />
 
       <p className="secure">

@@ -26,6 +26,10 @@ export const DI = {
   FILE_BUCKET: Symbol("FILE_BUCKET"),
   /** Narrow port: "the name we verified for this user", nothing more. */
   VERIFIED_NAME_LOOKUP: Symbol("VERIFIED_NAME_LOOKUP"),
+  /** Compares a selfie with the Aadhaar photograph. Null when the models are absent. */
+  FACE_MATCHER: Symbol("FACE_MATCHER"),
+  /** Narrow port: "check this selfie against this user's Aadhaar photo". */
+  SELFIE_CHECK: Symbol("SELFIE_CHECK"),
 } as const;
 
 /** 32 bytes, base64. Rejected if absent, short, or all zeroes. */
@@ -104,6 +108,12 @@ export const ConfigSchema = z.object({
    * fall back to — LocalDiskBucket refuses to construct in production at all.
    */
   FILE_BUCKET_ROOT: z.string().default(".kwx-bucket"),
+
+  /**
+   * Where the face models live. Defaults to where `pnpm face:models` puts
+   * them; without them the selfie is stored unscored and goes to a reviewer.
+   */
+  FACE_MODEL_DIR: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;

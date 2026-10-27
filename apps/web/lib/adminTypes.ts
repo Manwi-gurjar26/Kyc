@@ -36,6 +36,13 @@ export interface CaseDetailResponse extends QueueRow {
   vendor: string | null;
   vendorVersion: string | null;
   reasons: { code: string; detail: string; severity: string }[];
+  /**
+   * Short-lived URLs for the two photographs, or null when there is nothing
+   * to show. Null is the common case for the Aadhaar photo in development:
+   * the fake gateway returns no photograph at all.
+   */
+  selfieUrl: string | null;
+  aadhaarPhotoUrl: string | null;
   thresholdsUsed: Thresholds | null;
   thresholds: Thresholds;
   checks: {

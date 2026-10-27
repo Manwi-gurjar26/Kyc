@@ -1,4 +1,4 @@
-<!-- BEGIN:turborepo-agent-rules -->
+<!-- BEGIN:turborepo-agent-rules --
 
 # This is NOT the Turborepo you know
 

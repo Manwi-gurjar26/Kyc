@@ -1,0 +1,37 @@
+-- ===================================================================
+-- The Aadhaar name and date of birth, held so the PAN check can mean
+-- something.
+-- ===================================================================
+--
+-- The Income Tax Department does not tell us the name on a PAN. It takes a
+-- name from us and answers whether it matches, which puts the whole weight of
+-- the check on where that name came from.
+--
+-- Until now there was nowhere to get it. The Aadhaar step received the name
+-- UIDAI returned, handed it to the browser, and stored only the last four
+-- digits and a vendor token — so the only name on hand at PAN time was the one
+-- the person typed into the form. Matching that against the Department's
+-- record proves nothing: it is a name they can read off the card in front of
+-- them. A PAN_NAME_MISMATCH would catch a typo and nothing else.
+--
+-- So the name UIDAI returned is kept, for exactly that comparison and no other
+-- purpose. kyc_records.aadhaar_name is what displayNameFor() was standing in
+-- for, and its comment said so.
+--
+-- The date of birth is kept for two reasons. The Department matches it
+-- alongside the name, and decideKyc() fails a minor outright — a decision that
+-- could not be re-derived at review time while the date was discarded, which
+-- the rest of this table goes to some trouble to make possible.
+--
+-- What is still NOT here, and has no column anywhere in this database: the
+-- Aadhaar number itself.
+--
+-- Both columns are nullable, and must stay nullable. Every record written
+-- before this migration has no Aadhaar name, and a person who has consented
+-- but not yet verified has none either. The API refuses the PAN step when
+-- aadhaar_name is null rather than trusting a default.
+-- -------------------------------------------------------------------
+
+ALTER TABLE "kyc_records" ADD COLUMN "aadhaar_name" text;
+--> statement-breakpoint
+ALTER TABLE "kyc_records" ADD COLUMN "aadhaar_dob" text;

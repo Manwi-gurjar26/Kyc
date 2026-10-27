@@ -4,8 +4,10 @@ import {
   AadhaarOtpVerifySchema,
   ConsentInputSchema,
   CreateKycSessionInputSchema,
+  PanCheckInputSchema,
   type ConsentInput,
   type CreateKycSessionInput,
+  type PanCheckInput,
 } from "@kilowattx/validation";
 import {
   Body,
@@ -13,6 +15,7 @@ import {
   Get,
   Headers,
   Inject,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -119,35 +122,82 @@ export class KycController {
     return this.kyc.createSession(session.userId, body, idempotencyKey.trim());
   }
 
+  /**
+   * Collects the outcome after a hosted flow sends the person back.
+   *
+   * Called by the return page, with the session id it was handed. The body is
+   * empty on purpose: there is nothing the browser could tell us about the
+   * outcome that we would believe. It says "they are back"; the server asks
+   * the gateway what actually happened.
+   *
+   * Safe to call twice. Somebody reloading the page gets the decision already
+   * recorded, without a second vendor call.
+   */
+  /**
+   * The same thing without an id, for a gateway that does not give one back.
+   *
+   * DigiLocker returns the person to our redirect URL carrying its own
+   * parameters, none of which is the session we opened. The server resolves
+   * it from the caller's own record instead — which it could always have
+   * done, since that person is the one who opened it.
+   */
+  @Post("sessions/collect")
+  async collectCurrentSession(@Req() request: RequestWithSession) {
+    const session = sessionOf(request);
+    return this.kyc.collectSession(session.userId);
+  }
+
+  @Post("sessions/:vendorSessionId/collect")
+  async collectSession(
+    @Req() request: RequestWithSession,
+    @Param("vendorSessionId") vendorSessionId: string,
+  ) {
+    const session = sessionOf(request);
+    return this.kyc.collectSession(session.userId, vendorSessionId);
+  }
+
   /* ---------------------------------------------------------------- */
-  /* Aadhaar OTP                                                      */
+  /* Aadhaar OTP — removed                                            */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * POST aadhaar/otp and aadhaar/verify are gone.
+   *
+   * They were the OKYC route: take a number, have UIDAI send a one-time
+   * password, send the code back. UIDAI deprecated that endpoint and it has
+   * returned 503 "Source Unavailable" on live keys since 16 October, so the
+   * routes could only fail. Aadhaar is collected at DigiLocker now, through
+   * POST sessions and sessions/:id/collect below.
+   *
+   * KycService still has startAadhaarOtp and confirmAadhaarOtp, and the
+   * challenge table is still there, on purpose: no DigiLocker verification
+   * has completed end to end yet, and flipping KYC_PROVIDER back is the
+   * fallback if its field mapping turns out wrong. What is removed here is
+   * the route somebody could reach, not the capability.
+   */
+
+  /* ---------------------------------------------------------------- */
+  /* PAN                                                              */
   /* ---------------------------------------------------------------- */
 
   /**
-   * Step one of Aadhaar eKYC: send the OTP.
+   * Verifies a PAN against the Income Tax Department.
    *
-   * The number is validated here, offline, before it costs a gateway call —
-   * the Verhoeff checksum catches a mistyped digit for nothing.
+   * The body carries the PAN and nothing else — deliberately no name and no
+   * date of birth. Those are matched against what UIDAI returned at the
+   * Aadhaar step, and accepting them here would let the subject choose the
+   * input to their own name check.
+   *
+   * The ten characters are normalised and checked offline first, so a
+   * mistyped PAN costs nothing rather than a paid call.
    */
-  @Post("aadhaar/otp")
-  async sendAadhaarOtp(
+  @Post("pan")
+  async verifyPan(
     @Req() request: RequestWithSession,
-    @Body() body: unknown,
+    @Body(new ZodBody(PanCheckInputSchema)) body: PanCheckInput,
   ) {
     const session = sessionOf(request);
-    const input = AadhaarOtpRequestSchema.parse(body);
-    return this.kyc.startAadhaarOtp(session.userId, input.aadhaarNumber);
-  }
-
-  /** Step two: submit the OTP the person received. */
-  @Post("aadhaar/verify")
-  async verifyAadhaarOtp(
-    @Req() request: RequestWithSession,
-    @Body() body: unknown,
-  ) {
-    const session = sessionOf(request);
-    const input = AadhaarOtpVerifySchema.parse(body);
-    return this.kyc.confirmAadhaarOtp(session.userId, input.otp);
+    return this.kyc.verifyPan(session.userId, body.pan);
   }
 
   /**

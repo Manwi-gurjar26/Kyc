@@ -9,8 +9,13 @@ import { StepBar } from "../../StepBar";
  * somebody on the strength of a form submit would be telling them an outcome
  * nothing had decided yet.
  */
+/**
+ * Neutral on purpose. This page also shows "a colleague is checking this" and
+ * "we could not verify you", and a tab reading "Identity verified" over either
+ * of those told people they had passed when they had not.
+ */
 export const metadata = {
-  title: "Identity verified · KiloWattX",
+  title: "Verification status · KiloWattX",
 };
 
 const TONE: Record<string, { mark: string; title: string; sub: string }> = {
@@ -94,7 +99,10 @@ export default async function DonePage() {
             <div className="dt">PAN</div>
             <div className="dd">••••••{status.panLast4}</div>
           </div>
-          <span className="dstate">Verified</span>
+          {/* Only the overall decision says verified; a PAN on file is not that. */}
+          <span className="dstate">
+            {status.status === "VERIFIED" ? "Verified" : "Received"}
+          </span>
         </div>
       )}
 

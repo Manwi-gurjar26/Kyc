@@ -27,6 +27,7 @@ export {
 export {
   FAKE_SCENARIOS,
   KYC_PROVIDERS,
+  VendorAccountError,
   VendorError,
   VendorRequestError,
   VendorTimeoutError,
@@ -37,6 +38,7 @@ export {
   type FakeScenario,
   type GstLookupResult,
   type KybProvider,
+  type AadhaarRoute,
   type KycProvider,
   type KycProviderName,
   type KycRole,
@@ -82,6 +84,7 @@ export {
 export {
   SandboxClient,
   expiryOf,
+  isLiveSandboxKey,
   isoDate,
   type Envelope,
   type SandboxClientOptions,
@@ -93,8 +96,22 @@ export {
   SandboxKycProvider,
   type SandboxKycProviderOptions,
 } from "./sandboxKycProvider.js";
+export {
+  SandboxDigiLockerProvider,
+  type SandboxDigiLockerOptions,
+} from "./sandboxDigiLockerProvider.js";
 
 export { FakeKybProvider } from "./fakeKybProvider.js";
+
+export {
+  DEFAULT_FACE_MODEL_DIR,
+  FACE_CLEAR_MISMATCH,
+  OnnxFaceMatcher,
+  SFACE_SAME_PERSON_COSINE,
+  calibrate,
+  type FaceComparison,
+  type FaceMatcher,
+} from "./faceMatcher.js";
 
 export {
   FakeKycProvider,
