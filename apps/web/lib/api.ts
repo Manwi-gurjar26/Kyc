@@ -84,6 +84,26 @@ export async function setStaffRoles(roles: string[]): Promise<void> {
   });
 }
 
+/** Mirrors DevEnvironment in apps/api/src/kyc/devEnvironment.controller.ts. */
+export interface DevEnvironment {
+  kycProvider: "fake" | "sandbox" | "digilocker" | "cashfree";
+  vendorEnvironment: "live" | "test" | null;
+}
+
+/**
+ * Which verification gateway the API is running, or null if it cannot say —
+ * because it is down, or because it is production and the route does not
+ * exist. Never throws: the shell renders on every page, and a missing chip
+ * must not take a page down with it.
+ */
+export async function devEnvironment(): Promise<DevEnvironment | null> {
+  try {
+    return await api<DevEnvironment>("/v1/dev/environment", { authenticated: false });
+  } catch {
+    return null;
+  }
+}
+
 interface CallOptions {
   method?: "GET" | "POST";
   body?: unknown;

@@ -39,6 +39,7 @@ import { DI, type AppConfig } from "./config.js";
 import { DatabaseLifecycle } from "./common/databaseLifecycle.js";
 import { StaffGuard } from "./common/staffGuard.js";
 import { SessionGuard } from "./common/session.js";
+import { DevEnvironmentController } from "./kyc/devEnvironment.controller.js";
 import { DevUsersController } from "./kyc/devUsers.controller.js";
 import { DevVendorController } from "./kyc/devVendor.controller.js";
 import { KybController } from "./kyb/kyb.controller.js";
@@ -453,6 +454,7 @@ export class AppModule {
             FilesController,
             DevVendorController,
             DevUsersController,
+            DevEnvironmentController,
           ];
 
     return {

@@ -29,7 +29,7 @@ const OPTIONS: {
     kind: "Personal & Residential",
     what: "Individual Prosumer",
     who: "For homeowners, personal land owners and retail solar subscriptions.",
-    needs: "Aadhaar OTP and PAN",
+    needs: "Aadhaar via DigiLocker, PAN and a selfie",
   },
   {
     value: "BUSINESS",

@@ -83,6 +83,7 @@ export {
 export {
   SandboxClient,
   expiryOf,
+  isLiveSandboxKey,
   isoDate,
   type Envelope,
   type SandboxClientOptions,

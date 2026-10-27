@@ -49,8 +49,12 @@ export interface SandboxClientOptions {
  * loud failure is kept as the explicit check below, where it says what is
  * actually wrong.
  */
+export function isLiveSandboxKey(apiKey: string): boolean {
+  return apiKey.startsWith("key_live_");
+}
+
 function hostFor(apiKey: string, nodeEnv: string): string {
-  const isLiveKey = apiKey.startsWith("key_live_");
+  const isLiveKey = isLiveSandboxKey(apiKey);
 
   if (nodeEnv === "production" && !isLiveKey) {
     throw new Error(

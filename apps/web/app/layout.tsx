@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { currentUserId } from "../lib/api";
+import { currentUserId, devEnvironment, type DevEnvironment } from "../lib/api";
 import { Nav } from "./Nav";
 import { THEME_STORAGE_KEY, ThemeToggle } from "./ThemeToggle";
 
@@ -33,16 +33,34 @@ const THEME_SCRIPT = `try{var t=localStorage.getItem(${JSON.stringify(THEME_STOR
  * wrapping flex row, which at phone width collapsed into a ragged block three
  * deep and pushed the page into a horizontal scroll.
  *
- * The environment chip is not decoration. This app talks to an API running the
- * fake KYC provider, which verifies nobody — anyone looking at a screen here
- * should be able to tell at a glance that nothing real was checked.
+ * The environment chip is not decoration. Anyone looking at a screen here
+ * should be able to tell at a glance whether a real identity is being checked.
+ * It was hardcoded to the fake vendor, and kept saying "nothing is really
+ * verified" after the API moved to DigiLocker on a live key — so it now asks
+ * the API, which is the only thing that knows.
  */
+function envChip(env: DevEnvironment | null): { label: string; className: string } {
+  if (!env) {
+    return { label: "Vendor unknown · API not answering", className: "chip-env chip-env-unknown" };
+  }
+
+  if (env.kycProvider === "fake") {
+    return { label: "Fake vendor · nothing is really verified", className: "chip-env" };
+  }
+
+  const vendor = env.kycProvider === "digilocker" ? "DigiLocker" : env.kycProvider;
+  return env.vendorEnvironment === "live"
+    ? { label: `${vendor} · live · real identities`, className: "chip-env chip-env-live" }
+    : { label: `${vendor} · vendor test host`, className: "chip-env" };
+}
+
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const userId = await currentUserId();
+  const [userId, env] = await Promise.all([currentUserId(), devEnvironment()]);
+  const chip = envChip(env);
 
   return (
     /*
@@ -72,9 +90,7 @@ export default async function RootLayout({
           <div className="topbar-in">
             <div className="topbar-id">
               <span className="brand">KiloWattX</span>
-              <span className="chip-env">
-                Fake vendor · nothing is really verified
-              </span>
+              <span className={chip.className}>{chip.label}</span>
               {userId ? (
                 <span className="whoami" title="The selected development identity">
                   {userId.slice(0, 8)}…
