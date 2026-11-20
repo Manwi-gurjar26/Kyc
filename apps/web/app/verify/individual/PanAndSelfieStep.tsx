@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { LockIcon } from "../../Icons";
 import { SelfieCapture } from "./SelfieCapture";
 import { submitPan } from "../actions";
 
@@ -18,7 +19,12 @@ import { submitPan } from "../actions";
  * is stored for a reviewer to compare against the Aadhaar photograph, because
  * no gateway we can reach sells a face match.
  */
-export function PanAndSelfieStep() {
+/**
+ * `aadhaarLast4` is the masked tail the API holds, whichever route stored it.
+ * The chip names no route: this screen follows DigiLocker and the number
+ * route alike, and saying "through DigiLocker" after an OTP was wrong.
+ */
+export function PanAndSelfieStep({ aadhaarLast4 }: { aadhaarLast4?: string | null }) {
   const [pan, setPan] = useState("");
   const [selfie, setSelfie] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +45,7 @@ export function PanAndSelfieStep() {
     <>
       <div className="okchip" role="status">
         <span aria-hidden="true">✓</span>
-        <span>Aadhaar shared through DigiLocker</span>
+        <span>Aadhaar verified{aadhaarLast4 ? ` · ⋯${aadhaarLast4}` : ""}</span>
         <span className="src">UIDAI</span>
       </div>
 
@@ -84,7 +90,7 @@ export function PanAndSelfieStep() {
       </button>
 
       <p className="secure">
-        <span aria-hidden="true">🔒</span> Sent over TLS, stored encrypted, and
+        <LockIcon /> Sent over TLS, stored encrypted, and
         never shown back in full
       </p>
     </>

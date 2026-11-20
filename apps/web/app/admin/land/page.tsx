@@ -1,5 +1,6 @@
 import { ApiCallError, api, currentStaffRoles, currentUserId } from "../../../lib/api";
 import type { ParcelView, QueuedDocumentView } from "../../../lib/documentTypes";
+import { NeedsIdentity } from "../../NeedsIdentity";
 import { RolePicker } from "../RolePicker";
 import { ConsentActions, DocumentActions } from "./LandActions";
 
@@ -49,16 +50,11 @@ export default async function LandQueue() {
 
   if (!userId) {
     return (
-      <div className="card">
-        <h1>Pick an identity first</h1>
-        <p className="lead">
-          Every land decision is recorded against a name, so the queue needs to
-          know who is reviewing.
-        </p>
-        <a className="btn" href="/">
-          Go back
-        </a>
-      </div>
+      <NeedsIdentity
+        audience="staff"
+        eyebrow="Land review"
+        lead="Every land decision is recorded against a name, so the queue needs to know who is reviewing."
+      />
     );
   }
 

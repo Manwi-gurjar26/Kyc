@@ -6,15 +6,14 @@ import { startHostedAadhaar } from "../actions";
 /**
  * The Aadhaar step, when the gateway collects it on its own site.
  *
- * There is no number field here and there will never be one. The person signs
- * in to their own DigiLocker account, UIDAI sends them a one-time password
- * there, and they choose what to share with us. We receive a name, a date of
- * birth and a photograph — and no Aadhaar number, because none is sent.
+ * There is no number field on this route. The person signs in to their own
+ * DigiLocker account, UIDAI sends them a one-time password there, and they
+ * choose what to share with us. We receive a name, a date of birth and a
+ * photograph — and no Aadhaar number, because none is sent.
  *
- * That is worth saying on the screen rather than only in a comment. Somebody
- * being asked to prove their identity is entitled to know which of the two
- * things is happening, and "you will not type your Aadhaar number anywhere"
- * is the most reassuring true sentence available here.
+ * That is worth saying on the screen rather than only in a comment, and now
+ * more than before: the number route sits one tap away (AadhaarChoice), so
+ * the sentence has to say which route it is true of.
  *
  * The button opens a session — which costs a paid call — so it is disabled
  * while one is in flight. A double click must not open two.
@@ -57,7 +56,7 @@ export function HostedAadhaarStep() {
           us.
         </p>
         <p className="hint">
-          You will not type your Aadhaar number here, or anywhere on this site.
+          With DigiLocker you don&rsquo;t type your Aadhaar number on this site.
           The one-time password comes from UIDAI and is entered on their page.
           We receive your name, date of birth and photograph — and no number.
         </p>

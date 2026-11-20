@@ -296,9 +296,17 @@ export class SandboxClient {
       const body = (await response.json()) as Envelope<{ access_token: string }>;
 
       if (!response.ok || !body.data?.access_token) {
+        /**
+         * The gateway's own status and reason go into the message. This error
+         * is an account error, so it is logged and never shown to a customer —
+         * and without them the log said only "rejected", which cannot tell a
+         * revoked key (401/403) from a 200 whose body we failed to read.
+         */
+        const said = body.message ? `: ${body.message}` : "";
         throw new VendorAccountError(
           this.name,
-          "The verification gateway rejected our credentials. Check the API key and secret.",
+          "The verification gateway rejected our credentials. Check the API key and secret. " +
+            `(HTTP ${response.status}${said})`,
           response.status,
         );
       }

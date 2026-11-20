@@ -157,24 +157,48 @@ export class KycController {
   }
 
   /* ---------------------------------------------------------------- */
-  /* Aadhaar OTP — removed                                            */
+  /* Aadhaar OTP — the number route, beside DigiLocker                */
   /* ---------------------------------------------------------------- */
 
   /*
-   * POST aadhaar/otp and aadhaar/verify are gone.
+   * Restored as a second choice next to DigiLocker, not as a replacement.
    *
-   * They were the OKYC route: take a number, have UIDAI send a one-time
-   * password, send the code back. UIDAI deprecated that endpoint and it has
-   * returned 503 "Source Unavailable" on live keys since 16 October, so the
-   * routes could only fail. Aadhaar is collected at DigiLocker now, through
-   * POST sessions and sessions/:id/collect below.
-   *
-   * KycService still has startAadhaarOtp and confirmAadhaarOtp, and the
-   * challenge table is still there, on purpose: no DigiLocker verification
-   * has completed end to end yet, and flipping KYC_PROVIDER back is the
-   * fallback if its field mapping turns out wrong. What is removed here is
-   * the route somebody could reach, not the capability.
+   * They were removed on 21 October because UIDAI deprecated OKYC and it has
+   * returned 503 "Source Unavailable" on live keys since 16 October. That is
+   * still true: with KYC_PROVIDER=digilocker on live keys these routes reach
+   * the gateway and come back with a vendor failure (AADHAAR_UNAVAILABLE or
+   * AADHAAR_CHECK_FAILED), and the web screen offers DigiLocker in its place.
+   * They work against the fake vendor and against any gateway that still
+   * serves OKYC.
    */
+
+  /**
+   * Step one: send the OTP to the mobile registered with UIDAI.
+   *
+   * The number is validated here, offline, before it costs a gateway call —
+   * the Verhoeff checksum catches a mistyped digit for nothing. It is never
+   * logged, returned or stored; only the last four digits are kept.
+   */
+  @Post("aadhaar/otp")
+  async sendAadhaarOtp(
+    @Req() request: RequestWithSession,
+    @Body() body: unknown,
+  ) {
+    const session = sessionOf(request);
+    const input = AadhaarOtpRequestSchema.parse(body);
+    return this.kyc.startAadhaarOtp(session.userId, input.aadhaarNumber);
+  }
+
+  /** Step two: submit the OTP the person received. */
+  @Post("aadhaar/verify")
+  async verifyAadhaarOtp(
+    @Req() request: RequestWithSession,
+    @Body() body: unknown,
+  ) {
+    const session = sessionOf(request);
+    const input = AadhaarOtpVerifySchema.parse(body);
+    return this.kyc.confirmAadhaarOtp(session.userId, input.otp);
+  }
 
   /* ---------------------------------------------------------------- */
   /* PAN                                                              */

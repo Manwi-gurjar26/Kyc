@@ -1,4 +1,5 @@
 import { api, currentUserId, type KycStatusView } from "../../../lib/api";
+import { LockIcon } from "../../Icons";
 import { StepBar } from "../../StepBar";
 
 /**
@@ -125,7 +126,7 @@ export default async function DonePage() {
       </a>
 
       <p className="secure">
-        <span aria-hidden="true">🔒</span> Stored encrypted, retained as long as
+        <LockIcon /> Stored encrypted, retained as long as
         the law requires and no longer
       </p>
     </div>

@@ -182,25 +182,69 @@ export async function confirmSelfie(input: {
 /* Individual                                                         */
 /* ------------------------------------------------------------------ */
 
-/*
- * `sendAadhaarOtp` and `verifyIndividual` are gone.
+/* ------------------------------------------------------------------ */
+/* The Aadhaar-number route, offered beside DigiLocker                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sends an OTP to the mobile registered with UIDAI for this number.
  *
- * They took an Aadhaar number, asked the gateway to send a one-time password
- * to the mobile registered against it, and sent the code back. Aadhaar is
- * collected at DigiLocker now — on the government's own site, under the
- * person's own account — so no number and no code passes through this
- * application at all.
+ * Runs here, server side, so the twelve digits go from this server to the API
+ * and never sit in client-side state longer than the input that holds them.
  *
- * The provider methods and the challenge table are deliberately still there.
- * No DigiLocker verification has completed end to end yet, and the only thing
- * worse than one dead Aadhaar route is two: flipping KYC_PROVIDER back is the
- * fallback, and deleting the code behind it would remove that.
+ * Consent first, and its failure is not swallowed: a consent row written
+ * after the fact proves nothing about what somebody agreed to before their
+ * Aadhaar number was sent to a third party.
+ *
+ * Expect this to fail on live keys today: UIDAI deprecated OKYC and the
+ * gateway has answered 503 since 16 October. The screen offers DigiLocker
+ * when it does.
  */
+export async function sendAadhaarOtp(
+  aadhaarNumber: string,
+): Promise<Failure & { sentTo?: string }> {
+  try {
+    await api("/v1/kyc/consents", {
+      method: "POST",
+      body: { purpose: "KYC_VERIFICATION", noticeVersion: "2.1", locale: "en" },
+    });
+
+    const result = await api<{ sentTo: string }>("/v1/kyc/aadhaar/otp", {
+      method: "POST",
+      body: { aadhaarNumber },
+    });
+
+    return { sentTo: result.sentTo };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Checks the six digits.
+ *
+ * Only the OTP goes up. The gateway's reference id is held in Postgres
+ * against the signed-in person, so two people verifying at once cannot have
+ * their codes checked against each other's challenge.
+ */
+export async function confirmAadhaarOtp(
+  otp: string,
+): Promise<Failure & { last4?: string; nameOnRecord?: string }> {
+  try {
+    const result = await api<{ last4: string | null; nameOnRecord?: string }>(
+      "/v1/kyc/aadhaar/verify",
+      { method: "POST", body: { otp } },
+    );
+    return { last4: result.last4 ?? undefined, nameOnRecord: result.nameOnRecord };
+  } catch (error) {
+    return failure(error);
+  }
+}
 
 /**
  * Submits the PAN, which is also what triggers the decision.
  *
- * What is left of `verifyIndividual` once its OTP stage went. The API decides
+ * Separate from the Aadhaar step on either route. The API decides
  * at the end of the PAN step, so this call is what moves somebody out of
  * IN_PROGRESS and into the review queue.
  */

@@ -1,5 +1,5 @@
 import { StepBar } from "../../StepBar";
-import { HostedAadhaarStep } from "./HostedAadhaarStep";
+import { AadhaarChoice } from "./AadhaarChoice";
 import { PanAndSelfieStep } from "./PanAndSelfieStep";
 import { api, type KycStatusView } from "../../../lib/api";
 
@@ -30,8 +30,9 @@ export default async function IndividualPage() {
 
   /**
    * Aadhaar outstanding, or nothing known at all, means start at the
-   * beginning. The hosted step asks for nothing, so it is also the safe
-   * thing to show when the server could not be asked.
+   * beginning: the choice between DigiLocker and the Aadhaar number. Either
+   * route ends by storing an Aadhaar reference, after which this same check
+   * moves the person on to PAN and selfie.
    */
   const needsAadhaar = !status || status.remainingSteps.includes("AADHAAR");
 
@@ -43,11 +44,15 @@ export default async function IndividualPage() {
       <h1>Individual verification</h1>
       <p className="flowlead">
         {needsAadhaar
-          ? "Your Aadhaar through DigiLocker, then a PAN name match."
+          ? "Your Aadhaar, through DigiLocker or with your Aadhaar number, then a PAN name match."
           : "Your PAN and a photograph, and you are done."}
       </p>
 
-      {needsAadhaar ? <HostedAadhaarStep /> : <PanAndSelfieStep />}
+      {needsAadhaar ? (
+        <AadhaarChoice />
+      ) : (
+        <PanAndSelfieStep aadhaarLast4={status?.aadhaarLast4} />
+      )}
     </div>
   );
 }

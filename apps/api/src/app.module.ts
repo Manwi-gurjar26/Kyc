@@ -189,6 +189,22 @@ function buildKycProvider(
         webhookSecret: config.KYC_WEBHOOK_SECRET,
         client,
         warn: (line) => new Logger("DigiLocker").warn(line),
+        /**
+         * The Aadhaar-number route, offered beside DigiLocker: the same
+         * vendor's OKYC adapter on the same client and token. UIDAI has
+         * deprecated OKYC and it has returned 503 on live keys since
+         * 16 October, so on live keys this route is expected to fail with a
+         * "try DigiLocker" message until a gateway that still serves it is
+         * attached here. It is offered because it was asked for, not because
+         * it works today.
+         */
+        aadhaarOtp: new SandboxKycProvider({
+          apiKey: config.KYC_VENDOR_CLIENT_ID!,
+          apiSecret: config.KYC_VENDOR_CLIENT_SECRET!,
+          nodeEnv: config.NODE_ENV,
+          webhookSecret: config.KYC_WEBHOOK_SECRET,
+          client,
+        }),
       });
 
     case "cashfree":

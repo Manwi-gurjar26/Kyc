@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { chooseKycType, type ActionResult } from "./actions";
+import { DocumentIcon, LockIcon } from "./Icons";
 
 /**
  * Step 1: which kind of entity is being verified.
@@ -76,7 +77,7 @@ export function ChooseKycType() {
           <div className="what">{option.what}</div>
           <p className="who">{option.who}</p>
           <div className="needs">
-            <span aria-hidden="true">⌦</span> Requires {option.needs}
+            <DocumentIcon /> Requires {option.needs}
           </div>
         </button>
       ))}
@@ -95,7 +96,7 @@ export function ChooseKycType() {
       <Continue disabled={entity === null} />
 
       <p className="secure">
-        <span aria-hidden="true">🔒</span> Submitted over TLS and stored
+        <LockIcon /> Submitted over TLS and stored
         encrypted
       </p>
     </form>

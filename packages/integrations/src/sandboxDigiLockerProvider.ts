@@ -27,8 +27,10 @@ import { SandboxClient, isoDate } from "./sandboxClient.js";
  *
  * So this is the hosted-session shape the `KycProvider` interface already
  * describes: createSession() hands back a URL to send somebody to, and
- * fetchResult() asks server-to-server what came of it. The OTP methods throw,
- * because this gateway has no OTP of its own.
+ * fetchResult() asks server-to-server what came of it. DigiLocker has no OTP
+ * of its own, so the OTP methods throw — unless an Aadhaar-number adapter is
+ * attached (`aadhaarOtp`), in which case they delegate to it and the person
+ * may choose either route.
  *
  * NOT YET EXERCISED AGAINST A COMPLETED SESSION. The session can be opened —
  * that is confirmed against the live gateway — but no one has walked through
@@ -84,6 +86,16 @@ export interface SandboxDigiLockerOptions {
   download?: (url: string) => Promise<string>;
   /** Where a lost photograph is reported. It never fails the verification. */
   warn?: (line: string) => void;
+  /**
+   * The Aadhaar-number route, offered beside DigiLocker.
+   *
+   * DigiLocker itself has no OTP of its own to send. When this is given, the
+   * two OTP methods hand straight to it — in practice the same vendor's OKYC
+   * adapter on the same shared client — so a person can choose between
+   * signing in at DigiLocker and typing their number. Left out, the methods
+   * throw as before.
+   */
+  aadhaarOtp?: Pick<KycProvider, "sendAadhaarOtp" | "verifyAadhaarOtp">;
 }
 
 export class SandboxDigiLockerProvider implements KycProvider {
@@ -99,12 +111,14 @@ export class SandboxDigiLockerProvider implements KycProvider {
   private readonly clock: () => Date;
   private readonly download: (url: string) => Promise<string>;
   private readonly warn: (line: string) => void;
+  private readonly aadhaarOtp?: Pick<KycProvider, "sendAadhaarOtp" | "verifyAadhaarOtp">;
 
   constructor(options: SandboxDigiLockerOptions) {
     this.client = options.client ?? new SandboxClient(options);
     this.clock = options.clock ?? (() => new Date());
     this.download = options.download ?? downloadText;
     this.warn = options.warn ?? ((line) => console.warn(line));
+    this.aadhaarOtp = options.aadhaarOtp;
   }
 
   /* ---------------------------------------------------------------- */
@@ -314,18 +328,20 @@ export class SandboxDigiLockerProvider implements KycProvider {
   }
 
   /* ---------------------------------------------------------------- */
-  /* Not implemented: there is no OTP here                            */
+  /* The Aadhaar-number route, when one is attached                   */
   /* ---------------------------------------------------------------- */
 
   /**
-   * Both throw, rather than returning something empty.
+   * Delegated to `aadhaarOtp` when one was given; otherwise both throw,
+   * rather than returning something empty.
    *
-   * The one-time password in this flow is UIDAI's, sent and checked on the
-   * government's own site inside DigiLocker. A method here that quietly did
-   * nothing would read as an OTP that had been sent to somebody — and the
-   * caller would then wait for a code that was never coming.
+   * DigiLocker's own one-time password is UIDAI's, sent and checked on the
+   * government's site. A method here that quietly did nothing would read as
+   * an OTP that had been sent to somebody — and the caller would then wait
+   * for a code that was never coming.
    */
-  async sendAadhaarOtp(_aadhaarNumber: string): Promise<AadhaarOtpChallenge> {
+  async sendAadhaarOtp(aadhaarNumber: string): Promise<AadhaarOtpChallenge> {
+    if (this.aadhaarOtp) return this.aadhaarOtp.sendAadhaarOtp(aadhaarNumber);
     throw new Error(
       "DigiLocker has no OTP to send: the one-time password is UIDAI's and is " +
         "handled on the government's own site. Use createSession() and send the " +
@@ -333,7 +349,8 @@ export class SandboxDigiLockerProvider implements KycProvider {
     );
   }
 
-  async verifyAadhaarOtp(_referenceId: string, _otp: string): Promise<AadhaarOtpResult> {
+  async verifyAadhaarOtp(referenceId: string, otp: string): Promise<AadhaarOtpResult> {
+    if (this.aadhaarOtp) return this.aadhaarOtp.verifyAadhaarOtp(referenceId, otp);
     throw new Error(
       "DigiLocker has no OTP to verify: it is checked at digilocker.meripehchaan.gov.in. " +
         "Use fetchResult() once the person returns.",
