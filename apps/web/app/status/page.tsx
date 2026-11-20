@@ -1,4 +1,5 @@
 import { api, currentUserId, type KycStatusView } from "../../lib/api";
+import { NeedsIdentity } from "../NeedsIdentity";
 import { StatusPoller } from "./StatusPoller";
 
 /**
@@ -84,13 +85,10 @@ export default async function StatusPage() {
 
   if (!userId) {
     return (
-      <div className="card">
-        <h1>Pick an identity first</h1>
-        <p className="lead">There is nobody to show a status for.</p>
-        <a className="btn" href="/">
-          Go back
-        </a>
-      </div>
+      <NeedsIdentity
+        audience="customer"
+        lead="There is no verification to show a status for yet. It takes a few minutes: Aadhaar, PAN and a selfie."
+      />
     );
   }
 

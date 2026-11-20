@@ -45,6 +45,17 @@
   --on-fill: #14210a;
   --shadow: 0 1px 2px rgba(16, 32, 30, 0.06), 0 8px 24px -12px rgba(16, 32, 30, 0.18);
 
+  /* Liquid glass: see the section of that name at the end of this file. */
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-strong: rgba(255, 255, 255, 0.74);
+  --glass-edge: rgba(255, 255, 255, 0.8);
+  --glass-rim: rgba(20, 48, 28, 0.09);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 1px 1px rgba(30, 60, 20, 0.05), 0 14px 34px -16px rgba(30, 60, 20, 0.28);
+  --ambient-a: rgba(140, 198, 63, 0.42);
+  --ambient-b: rgba(52, 168, 158, 0.32);
+  --ambient-c: rgba(214, 140, 70, 0.28);
+
   --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --body: "IBM Plex Sans", "IBM Plex Sans Devanagari", -apple-system, "Segoe UI",
     sans-serif;
@@ -79,6 +90,16 @@
 
     --on-fill: #11180a;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+
+    --glass: rgba(30, 37, 47, 0.5);
+    --glass-strong: rgba(22, 27, 34, 0.72);
+    --glass-edge: rgba(255, 255, 255, 0.11);
+    --glass-rim: rgba(0, 0, 0, 0.4);
+    --glass-hi: rgba(255, 255, 255, 0.16);
+    --glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.75);
+    --ambient-a: rgba(154, 214, 63, 0.22);
+    --ambient-b: rgba(52, 168, 158, 0.2);
+    --ambient-c: rgba(214, 140, 70, 0.14);
   }
 }
 
@@ -124,6 +145,16 @@
 
   --on-fill: #11180a;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+
+  --glass: rgba(30, 37, 47, 0.5);
+  --glass-strong: rgba(22, 27, 34, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.11);
+  --glass-rim: rgba(0, 0, 0, 0.4);
+  --glass-hi: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.75);
+  --ambient-a: rgba(154, 214, 63, 0.22);
+  --ambient-b: rgba(52, 168, 158, 0.2);
+  --ambient-c: rgba(214, 140, 70, 0.14);
 }
 
 /*
@@ -264,7 +295,7 @@ button {
   font-size: 10.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--brand);
+  color: var(--brand-ink);
   background: var(--brand-soft);
   border: 1px solid var(--brand);
   padding: 3px 7px;
@@ -486,7 +517,7 @@ button {
   font-size: 10.5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--brand);
+  color: var(--brand-ink);
   margin: 0 0 10px;
 }
 
@@ -1877,6 +1908,32 @@ body:has(.adminroot) .topbar-in {
   margin-top: 14px;
 }
 
+/*
+ * Line icons (app/Icons.tsx). They sit in flex rows beside text that may wrap
+ * to two lines, so they must not shrink, and they align to the first line
+ * rather than floating to the middle of a two-line block.
+ */
+.icon {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 0.15em;
+}
+
+.choicecard .needs {
+  align-items: flex-start;
+}
+
+/* ---------- empty state: nobody signed in ---------- */
+
+/** The heading-to-action gap a lone card needs; the picker brings its own h2. */
+.emptystate .lead {
+  margin-bottom: 20px;
+}
+
+.emptystate h2:first-of-type {
+  margin-top: 4px;
+}
+
 /* ---------- the finished state ---------- */
 
 .bigtick {
@@ -1925,4 +1982,503 @@ body:has(.adminroot) .topbar-in {
   border-radius: 20px;
   padding: 4px 9px;
   white-space: nowrap;
+}
+
+/* ================================================================== */
+/* Motion                                                             */
+/* ================================================================== */
+/*
+ * Small, fast and functional: things arrive, respond when touched, and confirm
+ * a choice. Nothing loops and nothing waits on an animation to be usable.
+ *
+ * Every navigation here is a full page load (see Nav.tsx), so entry motion
+ * plays on every page. That is why it is 6px and under 400ms: noticed once,
+ * then not at all.
+ *
+ * All of it sits behind `no-preference` rather than relying on the global
+ * reduced-motion rule above. That rule shortens durations but leaves delays
+ * alone, so staggered content would sit invisible for its delay for exactly
+ * the people who asked for less motion.
+ *
+ * Entry uses `backwards` fill, never `both`: once finished, an element keeps
+ * no animated transform, so it never becomes a containing block for anything
+ * fixed-position inside it (the selfie camera overlay, for one).
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ---------- arriving ---------- */
+
+  .shell > *,
+  .flow > * {
+    animation: kx-rise 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  /* The flow column cascades, top to bottom, so the eye follows it down. */
+  .flow > :nth-child(2) { animation-delay: 40ms; }
+  .flow > :nth-child(3) { animation-delay: 80ms; }
+  .flow > :nth-child(4) { animation-delay: 120ms; }
+  .flow > :nth-child(5) { animation-delay: 160ms; }
+  .flow > :nth-child(n + 6) { animation-delay: 200ms; }
+
+  /* The choice cards are inside a form, one level down: stagger them too. */
+  .flow form > .choicecard {
+    animation: kx-rise 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .flow form > .choicecard:nth-of-type(1) { animation-delay: 170ms; }
+  .flow form > .choicecard:nth-of-type(2) { animation-delay: 230ms; }
+
+  /* The progress rail fills from the left, segment by segment. */
+  .steps i.on {
+    transform-origin: left center;
+    animation: kx-fill 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .steps i.on:nth-child(2) { animation-delay: 90ms; }
+  .steps i.on:nth-child(3) { animation-delay: 180ms; }
+  .steps i.on:nth-child(4) { animation-delay: 270ms; }
+
+  /* An error arrives with a nudge, so a changed screen reads as "look here". */
+  .alert {
+    animation: kx-nudge 340ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* The outcome mark lands with a little overshoot. */
+  .verdict .mark {
+    animation: kx-pop 460ms cubic-bezier(0.34, 1.56, 0.64, 1) 120ms backwards;
+  }
+
+  /* ---------- responding ---------- */
+
+  .choicecard {
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease,
+      box-shadow 200ms ease,
+      transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .choicecard:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+
+  .choicecard:active {
+    transform: translateY(0) scale(0.99);
+    transition-duration: 80ms;
+  }
+
+  /* Selecting confirms itself: the tick springs in. */
+  .choicecard[aria-pressed="true"] .tick {
+    animation: kx-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /*
+   * Continue fades into its enabled state when a card is picked, rather than
+   * snapping from grey to green: the change is the cue that it can now be
+   * pressed.
+   */
+  .cta {
+    transition:
+      background-color 220ms ease,
+      border-color 220ms ease,
+      color 220ms ease,
+      filter 120ms ease,
+      transform 80ms ease;
+  }
+
+  .cta:not(:disabled):active {
+    transform: scale(0.985);
+  }
+
+  .userrow {
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease;
+  }
+
+  .userrow:hover {
+    border-color: var(--line-strong);
+    background: var(--surface);
+  }
+
+  .userrow .go {
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .userrow:hover .go {
+    transform: translateX(3px);
+  }
+
+  .backlink {
+    transition:
+      background-color 140ms ease,
+      color 140ms ease,
+      transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .backlink:hover {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes kx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes kx-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes kx-nudge {
+  0% {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes kx-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* ================================================================== */
+/* Liquid glass                                                       */
+/* ================================================================== */
+/*
+ * Surfaces as frosted glass over a soft field of colour: they blur and
+ * saturate whatever is behind them, catch a bright rim along the top edge,
+ * and carry a faint diagonal sheen.
+ *
+ * Glass needs something behind it to bend, which is what the ambient field on
+ * body::before is for. It is fixed, so cards slide over it on scroll and the
+ * blur visibly shifts. The colours are the product's own: brand green, the
+ * teal of oxidised copper fittings, and copper.
+ *
+ * Legibility is the constraint. This is a form somebody types their PAN into,
+ * so the glass is milky rather than clear (58% white in light, 50% slate in
+ * dark) and the ambient colours are faint. Text contrast stays within a few
+ * percent of the solid surfaces it replaces, and inputs stay nearly opaque.
+ *
+ * Browsers without backdrop-filter keep the solid surfaces from earlier in
+ * this file, because everything here sits inside @supports.
+ */
+
+body {
+  /* A stacking context of its own, so the ambient layer's z-index:-1 stays inside it. */
+  isolation: isolate;
+  min-height: 100dvh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: -10vmax;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38vmax 30vmax at 12% 8%, var(--ambient-a), transparent 70%),
+    radial-gradient(34vmax 28vmax at 92% 22%, var(--ambient-b), transparent 70%),
+    radial-gradient(40vmax 32vmax at 70% 96%, var(--ambient-c), transparent 70%),
+    radial-gradient(30vmax 26vmax at 6% 78%, var(--ambient-b), transparent 70%),
+    /* Two behind the content column, so the glass there has colour to bend. */
+    radial-gradient(22vmax 18vmax at 38% 38%, var(--ambient-a), transparent 72%),
+    radial-gradient(24vmax 20vmax at 64% 62%, var(--ambient-b), transparent 72%);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  /* ---------- the shared material ---------- */
+
+  .card,
+  .choicecard,
+  .frow,
+  .notice,
+  .userrow,
+  .themetoggle,
+  .backlink,
+  .upload {
+    background:
+      linear-gradient(
+        155deg,
+        color-mix(in srgb, var(--glass-hi) 55%, transparent) 0%,
+        transparent 38%
+      ),
+      var(--glass);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+    border-color: var(--glass-edge);
+    box-shadow:
+      0 0 0 0.5px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi),
+      inset 0 -1px 0 color-mix(in srgb, var(--glass-rim) 60%, transparent),
+      var(--glass-shadow);
+  }
+
+  /* The header is denser glass, because content scrolls underneath it. */
+  .topbar {
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: blur(26px) saturate(180%);
+    border-bottom-color: var(--glass-edge);
+    box-shadow:
+      inset 0 -1px 0 var(--glass-rim),
+      0 8px 24px -18px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Bigger panes get rounder corners; small controls keep theirs. */
+  .card {
+    border-radius: 20px;
+  }
+
+  .choicecard {
+    border-radius: 18px;
+  }
+
+  /* ---------- states on glass ---------- */
+
+  .choicecard:hover,
+  .userrow:hover {
+    background:
+      linear-gradient(
+        155deg,
+        color-mix(in srgb, var(--glass-hi) 70%, transparent) 0%,
+        transparent 42%
+      ),
+      var(--glass-strong);
+    /* Restated: the motion section's hover would otherwise drop the rim. */
+    box-shadow:
+      0 0 0 0.5px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi),
+      0 2px 4px -2px var(--glass-rim),
+      var(--glass-shadow);
+  }
+
+  /* Chosen: the glass takes on a green tint, with a green rim. */
+  .choicecard[aria-pressed="true"],
+  .choicecard[aria-pressed="true"]:hover {
+    background:
+      linear-gradient(
+        155deg,
+        color-mix(in srgb, var(--glass-hi) 55%, transparent) 0%,
+        transparent 40%
+      ),
+      color-mix(in srgb, var(--brand) 16%, var(--glass));
+    border-color: var(--brand);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent),
+      inset 0 1px 0 var(--glass-hi),
+      var(--glass-shadow);
+  }
+
+  .choicecard[aria-pressed="true"] .kind {
+    background: var(--glass-strong);
+  }
+
+  /* The notice keeps its accent edge: it is the thing that says "read this". */
+  .notice {
+    border-left: 3px solid var(--accent);
+  }
+
+  .themebtn[aria-pressed="true"] {
+    background: var(--glass-strong);
+  }
+
+  /* Inputs stay nearly opaque: a PAN must be read exactly, not through a blur. */
+  input[type="text"],
+  input[type="tel"],
+  input[type="file"],
+  select,
+  textarea,
+  .frow-in input {
+    background: var(--glass-strong);
+    border-color: color-mix(in srgb, var(--line-strong) 80%, transparent);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--glass-rim) 70%, transparent);
+  }
+
+  input[type="text"]:focus,
+  input[type="tel"]:focus,
+  select:focus,
+  textarea:focus {
+    background: var(--surface);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  /* ---------- the green actions: wet, lit from above ---------- */
+
+  .btn:not(.ghost):not(:disabled):not([aria-disabled="true"]),
+  .cta:not(:disabled),
+  .inlinebtn:not(:disabled) {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.42) 0%,
+        rgba(255, 255, 255, 0.08) 48%,
+        rgba(0, 0, 0, 0) 52%,
+        rgba(0, 0, 0, 0.06) 100%
+      ),
+      var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 70%, #000);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+      0 8px 22px -10px color-mix(in srgb, var(--brand) 75%, transparent);
+  }
+
+  /* Disabled and ghost buttons are clear glass: present, but not inviting. */
+  .cta:disabled,
+  .btn:disabled,
+  .btn[aria-disabled="true"],
+  .inlinebtn:disabled,
+  .btn.ghost {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    backdrop-filter: blur(16px) saturate(150%);
+    border-color: var(--glass-edge);
+    box-shadow:
+      0 0 0 0.5px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi);
+  }
+
+  .btn.ghost:hover {
+    background: var(--glass-strong);
+  }
+
+  .cta {
+    border-radius: 16px;
+  }
+}
+
+/* ================================================================== */
+/* Aadhaar: DigiLocker or number                                      */
+/* ================================================================== */
+/*
+ * The two-way choice above the Aadhaar step (AadhaarChoice.tsx). A segmented
+ * control: one question, two answers, the chosen one raised. Selected on
+ * [aria-pressed], like the KYC type cards, so look and announcement agree.
+ */
+
+.routepick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.routeopt {
+  display: grid;
+  gap: 1px;
+  justify-items: center;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-2);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 200ms ease;
+}
+
+.routeopt:hover {
+  color: var(--ink);
+}
+
+.routeopt[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.routeopt-label {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.routeopt-note {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.routeopt[aria-pressed="true"] .routeopt-note {
+  color: var(--brand-ink);
+}
+
+/* Where the OTP went, between the number and the code. */
+.otpnote {
+  margin: 12px 0 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* "Change": undoes the number, so it must not look like the next step. */
+.inlinebtn.ghostbtn {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--ink-2);
+}
+
+/* A button that reads as a link: the way out offered inside an error. */
+.linkbtn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .routepick {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
+    border-color: var(--glass-edge);
+    box-shadow:
+      0 0 0 0.5px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi),
+      var(--glass-shadow);
+  }
+
+  .routeopt[aria-pressed="true"] {
+    background:
+      linear-gradient(
+        155deg,
+        color-mix(in srgb, var(--glass-hi) 70%, transparent) 0%,
+        transparent 45%
+      ),
+      var(--glass-strong);
+    border-color: var(--glass-edge);
+    box-shadow:
+      0 0 0 0.5px var(--glass-rim),
+      inset 0 1px 0 var(--glass-hi),
+      0 4px 12px -6px var(--glass-rim);
+  }
+
+  .inlinebtn.ghostbtn {
+    background: var(--glass);
+    border-color: var(--glass-edge);
+    box-shadow: none;
+  }
 }

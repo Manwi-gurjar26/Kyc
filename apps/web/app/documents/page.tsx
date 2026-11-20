@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { currentUserId } from "../../lib/api";
+import { NeedsIdentity } from "../NeedsIdentity";
 import { listParcels } from "./actions";
 import { ParcelList } from "./ParcelList";
 import { UploadPanel } from "./UploadPanel";
@@ -21,16 +21,11 @@ export default async function DocumentsPage() {
 
   if (!userId) {
     return (
-      <main className="shell">
-        <p className="eyebrow">Land documents</p>
-        <h1>Pick an identity first</h1>
-        <p className="lead">
-          Documents belong to a person. Choose who you are and come back.
-        </p>
-        <Link className="btn" href="/">
-          Choose an identity
-        </Link>
-      </main>
+      <NeedsIdentity
+        audience="customer"
+        eyebrow="Land documents"
+        lead="Land records belong to a verified person, so the upload opens once your own verification has started."
+      />
     );
   }
 
@@ -41,8 +36,13 @@ export default async function DocumentsPage() {
    */
   const parcels = await listParcels();
 
+  /*
+   * A plain wrapper, not <main className="shell">: the layout already renders
+   * that, and nesting a second one gave the page two main landmarks and twice
+   * the side padding of every other page.
+   */
   return (
-    <main className="shell">
+    <div>
       <p className="eyebrow">Step 3 · Land documents</p>
       <h1>Upload your land records</h1>
       <p className="lead">
@@ -91,6 +91,6 @@ export default async function DocumentsPage() {
         can ask us to delete your account at any time; documents a tax or land
         record requires us to keep will say so.
       </p>
-    </main>
+    </div>
   );
 }

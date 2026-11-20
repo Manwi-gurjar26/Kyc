@@ -35,6 +35,7 @@ import {
   type AadhaarRoute,
   type KycProvider,
   type VendorKycResult,
+  VendorAccountError,
   VendorRequestError,
 } from "@kilowattx/integrations";
 import { Inject, Injectable, Logger } from "@nestjs/common";
@@ -1450,12 +1451,38 @@ export class KycService {
    */
   private vendorFailure(error: unknown, fallback: string): ApiError {
     if (error instanceof VendorRequestError) {
+      /**
+       * Logged as well as returned. A refusal used to leave no trace at all
+       * on the server: the person saw a message, the log stayed silent, and
+       * nobody debugging a live failure could tell what the gateway had said.
+       * The message is the gateway's own wording, which carries no number.
+       */
+      this.logger.warn(
+        `Aadhaar gateway refused the request${
+          error.statusCode ? ` (HTTP ${error.statusCode})` : ""
+        }: ${error.message}`,
+      );
       return ApiError.badRequest("AADHAAR_CHECK_FAILED", error.message);
     }
     this.logger.error(
       "Aadhaar gateway call failed",
       error instanceof Error ? error.stack : String(error),
     );
+
+    /**
+     * Our own account cannot make calls — an expired subscription, an empty
+     * wallet, a refused key. A separate code, because it is not an outage of
+     * this one route: every route through the same gateway fails alike, so the
+     * screen must not suggest switching to DigiLocker, which shares the
+     * account. The message stays generic; the reason is in the log above.
+     */
+    if (error instanceof VendorAccountError) {
+      return ApiError.badRequest(
+        "VERIFICATION_UNAVAILABLE",
+        "Identity verification is temporarily unavailable. Please try again later.",
+      );
+    }
+
     return ApiError.badRequest("AADHAAR_UNAVAILABLE", `${fallback} Please try again shortly.`);
   }
 

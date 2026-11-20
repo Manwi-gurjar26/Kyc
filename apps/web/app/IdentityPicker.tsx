@@ -58,7 +58,7 @@ export function IdentityPicker({
         </form>
       ) : null}
 
-      <h2>Or add one</h2>
+      <h2>{users.length > 0 ? "Or add one" : "Add an identity"}</h2>
 
       {state.error ? (
         <div className="alert" role="alert">

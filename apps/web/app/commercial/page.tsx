@@ -1,5 +1,6 @@
 import { api, currentUserId } from "../../lib/api";
 import type { KybExample, OrganisationView } from "../../lib/kybTypes";
+import { NeedsIdentity } from "../NeedsIdentity";
 import { currentOrgId } from "./actions";
 import { ConsentGate } from "./ConsentGate";
 import { KybFlow } from "./KybFlow";
@@ -22,17 +23,11 @@ export default async function CommercialPage() {
 
   if (!userId) {
     return (
-      <div className="card">
-        <p className="eyebrow">Commercial User · PPA</p>
-        <h1>Pick an identity first</h1>
-        <p className="lead">
-          A business check attaches you to the business, and pulls your own
-          Aadhaar, PAN and selfie in behind it. So we need to know who you are.
-        </p>
-        <a className="btn" href="/">
-          Go back
-        </a>
-      </div>
+      <NeedsIdentity
+        audience="customer"
+        eyebrow="Commercial User · PPA"
+        lead="A business check attaches you to the business, and pulls your own Aadhaar, PAN and selfie in behind it. Start by choosing Registered Business."
+      />
     );
   }
 

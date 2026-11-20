@@ -1,5 +1,6 @@
 import { ApiCallError, api, currentStaffRoles, currentUserId } from "../../lib/api";
 import type { QueueResponse } from "../../lib/adminTypes";
+import { NeedsIdentity } from "../NeedsIdentity";
 import { RolePicker } from "./RolePicker";
 
 /**
@@ -34,16 +35,11 @@ export default async function AdminQueue() {
 
   if (!userId) {
     return (
-      <div className="card">
-        <h1>Pick an identity first</h1>
-        <p className="lead">
-          The review queue needs to know who is reviewing, because every
-          decision is recorded against a name.
-        </p>
-        <a className="btn" href="/">
-          Go back
-        </a>
-      </div>
+      <NeedsIdentity
+        audience="staff"
+        eyebrow="Review queue"
+        lead="Every decision in the queue is recorded against a name, so it needs to know who is reviewing."
+      />
     );
   }
 

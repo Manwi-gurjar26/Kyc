@@ -323,6 +323,59 @@ describe("the routes this gateway does not have", () => {
   });
 });
 
+describe("the Aadhaar-number route, when one is attached", () => {
+  /**
+   * Offered beside DigiLocker: the OTP calls go to the attached adapter, with
+   * exactly what they were given, and its answers come back untouched. The
+   * hosted route is unaffected — it still reports HOSTED.
+   */
+  test("sending and verifying are handed to the attached adapter", async () => {
+    const calls: unknown[][] = [];
+    const provider = new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      client: clientFor({}),
+      aadhaarOtp: {
+        async sendAadhaarOtp(number) {
+          calls.push(["send", number]);
+          return { referenceId: "ref-1", last4: "7058", sentTo: "******1234" } as never;
+        },
+        async verifyAadhaarOtp(referenceId, otp) {
+          calls.push(["verify", referenceId, otp]);
+          return { status: "SUCCESS", refToken: "tok" } as never;
+        },
+      },
+    });
+
+    const challenge = await provider.sendAadhaarOtp("999941057058");
+    const result = await provider.verifyAadhaarOtp("ref-1", "123456");
+
+    expect(calls).toEqual([
+      ["send", "999941057058"],
+      ["verify", "ref-1", "123456"],
+    ]);
+    expect(challenge).toMatchObject({ referenceId: "ref-1" });
+    expect(result).toMatchObject({ status: "SUCCESS" });
+    expect(provider.aadhaarRoute).toBe("HOSTED");
+  });
+
+  test("a failure from the attached adapter is not swallowed", async () => {
+    const provider = new SandboxDigiLockerProvider({
+      ...OPTIONS,
+      client: clientFor({}),
+      aadhaarOtp: {
+        sendAadhaarOtp: async () => {
+          throw new Error("503 Source Unavailable");
+        },
+        verifyAadhaarOtp: async () => {
+          throw new Error("unused");
+        },
+      },
+    });
+
+    await expect(provider.sendAadhaarOtp("999941057058")).rejects.toThrow(/503/);
+  });
+});
+
 /* ------------------------------------------------------------------ */
 
 describe("how this gateway collects Aadhaar", () => {
